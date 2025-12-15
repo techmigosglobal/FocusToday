@@ -147,10 +147,20 @@ class _SplashScreenState extends State<SplashScreen>
                         ),
                       ],
                     ),
-                    child: const Icon(
-                      Icons.connected_tv,
-                      size: 120,
-                      color: Colors.white,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(60),
+                      child: Image.asset(
+                        'assets/images/eagle_tv_logo.png',
+                        width: 120,
+                        height: 120,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) =>
+                            const Icon(
+                              Icons.connected_tv,
+                              size: 120,
+                              color: Colors.white,
+                            ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 32),

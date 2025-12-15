@@ -72,7 +72,20 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
                 const SizedBox(height: 60),
 
                 // Logo
-                Icon(Icons.connected_tv, size: 80, color: AppColors.primary),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(40),
+                  child: Image.asset(
+                    'assets/images/eagle_tv_logo.png',
+                    width: 80,
+                    height: 80,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Icon(
+                      Icons.connected_tv,
+                      size: 80,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 24),
 
                 // Title
