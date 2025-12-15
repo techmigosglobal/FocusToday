@@ -1,0 +1,68 @@
+name: eagle_tv
+description: "EagleTV - Premium Offline-First Social Media Application"
+publish_to: 'none'
+
+version: 2.0.0+1
+
+environment:
+  sdk: ^3.10.3
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # UI Components
+  google_fonts: ^6.1.0              # Plus Jakarta Sans
+  cached_network_image: ^3.3.0      # Image caching
+  shimmer: ^3.0.0                   # Skeleton loaders
+  cupertino_icons: ^1.0.8
+  
+  # State Management
+  provider: ^6.1.1
+  
+  # Local Storage
+  sqflite: ^2.3.0                   # SQL database
+  path: ^1.8.0                      # Path manipulation
+  path_provider: ^2.1.1             # File paths
+  shared_preferences: ^2.2.2        # Simple key-value storage
+  
+  # Media Handling
+  image_picker: ^1.0.5              # Gallery/camera access
+  video_player: ^2.8.1              # Video playback
+  image_cropper: ^8.0.3             # Image editing
+  file_picker: ^8.0.0               # File selection (PDF, etc.)
+  syncfusion_flutter_pdfviewer: ^31.2.18  # PDF rendering
+  
+  # Networking (future backend)
+  dio: ^5.4.0                       # HTTP client
+  connectivity_plus: ^5.0.2         # Network status
+  
+  # Internationalization
+  flutter_localizations:
+    sdk: flutter
+  intl: ^0.20.2                     # Date/number formatting
+  
+  # Utilities
+  uuid: ^4.3.3                      # Unique IDs
+  share_plus: ^7.2.1                # Native sharing
+  url_launcher: ^6.2.2              # Open URLs
+  permission_handler: ^11.3.1
+  
+  # Notifications & Translation
+  flutter_local_notifications: ^19.2.0
+  google_mlkit_translation: ^0.12.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.3
+
+flutter:
+  uses-material-design: true
+  
+  # Assets
+  assets:
+    - assets/images/
+  
+  generate: true  # Enable i18n code generation
