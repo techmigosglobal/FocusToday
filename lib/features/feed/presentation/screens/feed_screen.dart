@@ -145,6 +145,7 @@ class _FeedScreenState extends State<FeedScreen> {
                   scrollDirection: Axis.vertical,
                   physics: const SnapPageScrollPhysics(),
                   itemCount: _posts.length,
+                  onPageChanged: (page) => HapticFeedback.selectionClick(),
                   itemBuilder: (context, index) {
                     return FlipCardAnimation(
                       index: index,
