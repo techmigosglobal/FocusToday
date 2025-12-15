@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/services/media_picker_service.dart';
@@ -128,6 +129,53 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       _selectedMedia = null;
       _contentType = ContentType.none;
     });
+  }
+
+  /// Pick PDF file with validation
+  Future<void> _pickPdfFile() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+        withData: false,
+      );
+
+      if (result == null || result.files.isEmpty) return;
+
+      final file = File(result.files.single.path!);
+
+      // Validate file size (max 10MB)
+      final fileSize = await file.length();
+      final maxSize = 10 * 1024 * 1024; // 10MB
+
+      if (fileSize > maxSize) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('PDF file size must be less than 10MB'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      if (mounted) {
+        setState(() {
+          _selectedMedia = file;
+          _contentType = ContentType.pdf;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error selecting PDF: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   /// Submit post
@@ -300,6 +348,34 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                         borderRadius: BorderRadius.circular(12),
                         child: _contentType == ContentType.image
                             ? Image.file(_selectedMedia!, fit: BoxFit.contain)
+                            : _contentType == ContentType.pdf
+                            ? Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.picture_as_pdf,
+                                      size: 64,
+                                      color: Colors.red.withValues(alpha: 0.8),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'PDF Document',
+                                      style: TextStyle(color: Colors.white),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _selectedMedia!.path.split('/').last,
+                                      style: TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 12,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              )
                             : Center(
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
@@ -366,6 +442,22 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 12),
+                // PDF Button
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _pickPdfFile,
+                    icon: const Icon(Icons.picture_as_pdf, color: Colors.red),
+                    label: const Text('PDF Document'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      side: BorderSide(
+                        color: Colors.red.withValues(alpha: 0.5),
+                      ),
+                    ),
+                  ),
                 ),
               ],
               const SizedBox(height: 24),
