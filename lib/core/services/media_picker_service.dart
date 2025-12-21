@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
+import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 
 /// Media Picker Service
-/// Handles image and video selection with editing capabilities
+/// Handles image, video, and PDF selection with editing capabilities
 class MediaPickerService {
   final ImagePicker _picker = ImagePicker();
 
@@ -52,7 +53,6 @@ class MediaPickerService {
 
       if (video == null) return null;
 
-      // Check file size (max 50MB)
       final file = File(video.path);
       final fileSize = await file.length();
       if (fileSize > 50 * 1024 * 1024) {
@@ -75,11 +75,36 @@ class MediaPickerService {
 
       if (video == null) return null;
 
-      // Check file size (max 50MB)
       final file = File(video.path);
       final fileSize = await file.length();
       if (fileSize > 50 * 1024 * 1024) {
         throw Exception('Video size must be less than 50MB');
+      }
+
+      return file;
+    } catch (_) {
+      rethrow;
+    }
+  }
+
+  /// Pick PDF file
+  Future<File?> pickPdfFile() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+        withData: false,
+      );
+
+      if (result == null || result.files.isEmpty) return null;
+
+      final path = result.files.single.path;
+      if (path == null) return null;
+
+      final file = File(path);
+      final fileSize = await file.length();
+      if (fileSize > 20 * 1024 * 1024) {
+        throw Exception('PDF size must be less than 20MB');
       }
 
       return file;
@@ -96,8 +121,8 @@ class MediaPickerService {
         uiSettings: [
           AndroidUiSettings(
             toolbarTitle: 'Crop Image',
-            toolbarColor: Color(0xFF1A1A2E),
-            toolbarWidgetColor: Color(0xFFFFFFFF),
+            toolbarColor: const Color(0xFF1A1A2E),
+            toolbarWidgetColor: const Color(0xFFFFFFFF),
             initAspectRatio: CropAspectRatioPreset.original,
             lockAspectRatio: false,
             aspectRatioPresets: [
@@ -125,14 +150,4 @@ class MediaPickerService {
       return null;
     }
   }
-
-  /// Show media source selection (Gallery or Camera)
-  static Future<MediaSource?> showSourceSelection() async {
-    // This will be called from the UI to show bottom sheet
-    // Returns the selected source
-    return null;
-  }
 }
-
-/// Media source enum
-enum MediaSource { gallery, camera }

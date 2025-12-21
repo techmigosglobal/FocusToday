@@ -18,8 +18,10 @@ class _SplashScreenState extends State<SplashScreen>
     with TickerProviderStateMixin {
   late AnimationController _fadeController;
   late AnimationController _scaleController;
+  late AnimationController _pulseController;
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
+  late Animation<double> _pulseAnimation;
 
   @override
   void initState() {
@@ -40,7 +42,7 @@ class _SplashScreenState extends State<SplashScreen>
       end: 1.0,
     ).animate(CurvedAnimation(parent: _fadeController, curve: Curves.easeIn));
 
-    // Scale animation
+    // Scale animation (Initial entry)
     _scaleController = AnimationController(
       duration: const Duration(milliseconds: 600),
       vsync: this,
@@ -49,10 +51,19 @@ class _SplashScreenState extends State<SplashScreen>
       CurvedAnimation(parent: _scaleController, curve: Curves.easeOutBack),
     );
 
+    // Pulse animation (Looping)
+    _pulseController = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    );
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.08).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
     // Start animations
     _fadeController.forward();
-    Future.delayed(const Duration(milliseconds: 200), () {
-      if (mounted) _scaleController.forward();
+    _scaleController.forward().then((_) {
+      _pulseController.repeat(reverse: true);
     });
   }
 
@@ -60,6 +71,7 @@ class _SplashScreenState extends State<SplashScreen>
   void dispose() {
     _fadeController.dispose();
     _scaleController.dispose();
+    _pulseController.dispose();
     super.dispose();
   }
 
@@ -147,19 +159,22 @@ class _SplashScreenState extends State<SplashScreen>
                         ),
                       ],
                     ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(60),
-                      child: Image.asset(
-                        'assets/images/eagle_tv_logo.png',
-                        width: 120,
-                        height: 120,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) =>
-                            const Icon(
-                              Icons.connected_tv,
-                              size: 120,
-                              color: Colors.white,
-                            ),
+                    child: ScaleTransition(
+                      scale: _pulseAnimation,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(60),
+                        child: Image.asset(
+                          'assets/images/eagle_tv_logo.png',
+                          width: 120,
+                          height: 120,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) =>
+                              const Icon(
+                                Icons.connected_tv,
+                                size: 120,
+                                color: Colors.white,
+                              ),
+                        ),
                       ),
                     ),
                   ),

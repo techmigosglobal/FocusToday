@@ -11,6 +11,7 @@ import '../../../auth/data/repositories/auth_repository.dart';
 import '../../../auth/presentation/screens/phone_login_screen.dart';
 import '../../../subscription/presentation/screens/subscription_plans_screen.dart';
 import '../../../../core/services/language_service.dart';
+import '../../../../core/localization/app_localizations.dart';
 import '../../../../shared/widgets/language_toggle_widget.dart';
 
 /// Profile Screen
@@ -19,11 +20,7 @@ class ProfileScreen extends StatefulWidget {
   final User currentUser;
   final User? profileUser; // If viewing another user's profile
 
-  const ProfileScreen({
-    super.key,
-    required this.currentUser,
-    this.profileUser,
-  });
+  const ProfileScreen({super.key, required this.currentUser, this.profileUser});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -43,7 +40,8 @@ class _ProfileScreenState extends State<ProfileScreen>
   AppLanguage _currentLanguage = AppLanguage.english;
 
   User get displayUser => widget.profileUser ?? widget.currentUser;
-  bool get isOwnProfile => widget.profileUser == null ||
+  bool get isOwnProfile =>
+      widget.profileUser == null ||
       widget.profileUser!.id == widget.currentUser.id;
 
   @override
@@ -87,7 +85,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       final postsCount = isOwnProfile
           ? await _profileRepo.getUserAllPostsCount(displayUser.id)
           : await _profileRepo.getUserPostsCount(displayUser.id);
-      
+
       final posts = await _profileRepo.getUserPosts(
         displayUser.id,
         includeAll: isOwnProfile,
@@ -97,7 +95,9 @@ class _ProfileScreenState extends State<ProfileScreen>
       int bookmarksCount = 0;
       List<Post> bookmarks = [];
       if (isOwnProfile) {
-        bookmarksCount = await _profileRepo.getUserBookmarksCount(displayUser.id);
+        bookmarksCount = await _profileRepo.getUserBookmarksCount(
+          displayUser.id,
+        );
         bookmarks = await _profileRepo.getUserBookmarks(displayUser.id);
       }
 
@@ -111,9 +111,9 @@ class _ProfileScreenState extends State<ProfileScreen>
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading profile: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error loading profile: $e')));
       }
     }
   }
@@ -133,9 +133,9 @@ class _ProfileScreenState extends State<ProfileScreen>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error removing bookmark: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error removing bookmark: $e')));
       }
     }
   }
@@ -174,9 +174,12 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   @override
   Widget build(BuildContext context) {
+    final localizations = AppLocalizations(_currentLanguage);
     return Scaffold(
       appBar: AppBar(
-        title: Text(isOwnProfile ? 'Profile' : displayUser.displayName),
+        title: Text(
+          isOwnProfile ? localizations.profile : displayUser.displayName,
+        ),
         actions: [
           if (isOwnProfile) ...[
             Center(
@@ -191,7 +194,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             IconButton(
               icon: const Icon(Icons.logout),
               onPressed: _handleLogout,
-              tooltip: 'Logout',
+              tooltip: localizations.logout,
             ),
         ],
       ),
@@ -220,9 +223,12 @@ class _ProfileScreenState extends State<ProfileScreen>
                     controller: _tabController,
                     labelColor: AppColors.primary,
                     indicatorColor: AppColors.primary,
-                    tabs: const [
-                      Tab(text: 'Posts', icon: Icon(Icons.grid_on)),
-                      Tab(text: 'Bookmarks', icon: Icon(Icons.bookmark)),
+                    tabs: [
+                      Tab(text: localizations.posts, icon: Icon(Icons.grid_on)),
+                      Tab(
+                        text: localizations.bookmarks,
+                        icon: Icon(Icons.bookmark),
+                      ),
                     ],
                   ),
 
@@ -255,6 +261,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   Widget _buildProfileHeader() {
+    final localizations = AppLocalizations(_currentLanguage);
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -280,11 +287,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                           ),
                         ),
                       )
-                    : Icon(
-                        Icons.person,
-                        size: 40,
-                        color: AppColors.background,
-                      ),
+                    : Icon(Icons.person, size: 40, color: AppColors.background),
               ),
               const SizedBox(width: 16),
 
@@ -296,8 +299,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                     Text(
                       displayUser.displayName,
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Container(
@@ -330,9 +333,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                     final result = await Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => EditProfileScreen(
-                          currentUser: widget.currentUser,
-                        ),
+                        builder: (_) =>
+                            EditProfileScreen(currentUser: widget.currentUser),
                       ),
                     );
 
@@ -353,7 +355,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               style: Theme.of(context).textTheme.bodyMedium,
             ),
           ],
-          
+
           // Subscription button for public users
           if (isOwnProfile && displayUser.role == UserRole.publicUser) ...[
             const SizedBox(height: 16),
@@ -362,14 +364,13 @@ class _ProfileScreenState extends State<ProfileScreen>
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => SubscriptionPlansScreen(
-                      userId: displayUser.id,
-                    ),
+                    builder: (_) =>
+                        SubscriptionPlansScreen(userId: displayUser.id),
                   ),
                 );
               },
               icon: const Icon(Icons.star),
-              label: const Text('Upgrade to Premium'),
+              label: Text(localizations.upgradeToPremium),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.secondary,
                 foregroundColor: Colors.white,

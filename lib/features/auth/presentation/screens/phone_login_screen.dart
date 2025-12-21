@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_dimensions.dart';
+import '../../../../core/services/language_service.dart';
+import '../../../../core/localization/app_localizations.dart';
+import '../../data/repositories/auth_repository.dart';
 import 'otp_verification_screen.dart';
 
 /// Phone Login Screen
@@ -17,6 +20,22 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _phoneController = TextEditingController();
   bool _isLoading = false;
+  AppLanguage _currentLanguage = AppLanguage.english;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLanguage();
+  }
+
+  Future<void> _loadLanguage() async {
+    final languageService = await LanguageService.init();
+    if (mounted) {
+      setState(() {
+        _currentLanguage = languageService.currentLanguage;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -41,24 +60,45 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
 
     setState(() => _isLoading = true);
 
-    // Simulate API call
-    await Future.delayed(const Duration(seconds: 1));
-
-    setState(() => _isLoading = false);
-
-    if (mounted) {
-      // Navigate to OTP screen
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) =>
-              OTPVerificationScreen(phoneNumber: _phoneController.text),
-        ),
+    try {
+      final authRepo = await AuthRepository.init();
+      await authRepo.signInWithPhoneNumber(
+        phoneNumber: _phoneController.text,
+        onCodeSent: (verificationId) {
+          if (mounted) {
+            setState(() => _isLoading = false);
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => OTPVerificationScreen(
+                  phoneNumber: _phoneController.text,
+                  verificationId: verificationId,
+                ),
+              ),
+            );
+          }
+        },
+        onVerificationFailed: (e) {
+          if (mounted) {
+            setState(() => _isLoading = false);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(e.message ?? 'Verification failed')),
+            );
+          }
+        },
       );
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('An error occurred. Please try again.')),
+        );
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final localizations = AppLocalizations(_currentLanguage);
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
@@ -71,18 +111,31 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
               children: [
                 const SizedBox(height: 60),
 
-                // Logo
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(40),
-                  child: Image.asset(
-                    'assets/images/eagle_tv_logo.png',
-                    width: 80,
-                    height: 80,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Icon(
-                      Icons.connected_tv,
-                      size: 80,
-                      color: AppColors.primary,
+                // Logo with better visibility
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.2),
+                        blurRadius: 20,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(40),
+                    child: Image.asset(
+                      'assets/images/eagle_tv_logo.png',
+                      width: 80,
+                      height: 80,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Icon(
+                        Icons.connected_tv,
+                        size: 80,
+                        color: AppColors.primary,
+                      ),
                     ),
                   ),
                 ),
@@ -90,7 +143,7 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
 
                 // Title
                 Text(
-                  'Welcome to EagleTV',
+                  localizations.welcomeTo,
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.displaySmall,
                 ),
@@ -98,7 +151,7 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
 
                 // Subtitle
                 Text(
-                  'Enter your phone number to continue',
+                  localizations.enterPhoneNumber,
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                     color: AppColors.textPrimary.withValues(alpha: 0.7),
@@ -116,15 +169,13 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
                     LengthLimitingTextInputFormatter(10),
                   ],
                   decoration: InputDecoration(
-                    labelText: 'Phone Number',
+                    labelText: localizations.phoneNumber,
                     hintText: 'Enter 10-digit phone number',
                     prefixIcon: Icon(Icons.phone, color: AppColors.primary),
                     prefixText: '+91 ',
                   ),
                   validator: _validatePhone,
                 ),
-
-                const SizedBox(height: 32),
 
                 // Send OTP Button
                 ElevatedButton(
@@ -140,7 +191,7 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
                             ),
                           ),
                         )
-                      : const Text('Send OTP'),
+                      : Text(localizations.sendOTP),
                 ),
 
                 const Spacer(),
@@ -150,7 +201,7 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
                   onPressed: () {
                     // Future: Open privacy policy
                   },
-                  child: const Text('Privacy Policy'),
+                  child: Text(localizations.privacyPolicy),
                 ),
 
                 const SizedBox(height: 16),

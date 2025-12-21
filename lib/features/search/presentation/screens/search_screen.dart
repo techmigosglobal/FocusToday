@@ -12,10 +12,7 @@ import '../../../profile/presentation/screens/profile_screen.dart';
 class SearchScreen extends StatefulWidget {
   final models.User currentUser;
 
-  const SearchScreen({
-    super.key,
-    required this.currentUser,
-  });
+  const SearchScreen({super.key, required this.currentUser});
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -54,7 +51,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   void _onSearchChanged(String query) {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
-    
+
     _debounce = Timer(const Duration(milliseconds: 300), () {
       _performSearch(query);
     });
@@ -85,7 +82,7 @@ class _SearchScreenState extends State<SearchScreen> {
       }
 
       if (_selectedFilter == 'All' || _selectedFilter == 'Users') {
-        final users = await _searchRepo.searchUsers(query);
+        final List<models.User> users = await _searchRepo.searchUsers(query);
         if (mounted) {
           setState(() => _userResults = users);
         }
@@ -94,9 +91,9 @@ class _SearchScreenState extends State<SearchScreen> {
       await _loadSearchHistory();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Search error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Search error: $e')));
       }
     } finally {
       if (mounted) {
@@ -164,14 +161,16 @@ class _SearchScreenState extends State<SearchScreen> {
             child: _isLoading
                 ? Center(
                     child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        AppColors.primary,
+                      ),
                     ),
                   )
                 : hasQuery
-                    ? hasResults
-                        ? _buildSearchResults()
-                        : _buildEmptyState()
-                    : _buildSearchHistory(),
+                ? hasResults
+                      ? _buildSearchResults()
+                      : _buildEmptyState()
+                : _buildSearchHistory(),
           ),
         ],
       ),
@@ -199,30 +198,32 @@ class _SearchScreenState extends State<SearchScreen> {
       padding: const EdgeInsets.all(8),
       children: [
         // Posts results
-        if (_postResults.isNotEmpty && (_selectedFilter == 'All' || _selectedFilter == 'Posts')) ...[
+        if (_postResults.isNotEmpty &&
+            (_selectedFilter == 'All' || _selectedFilter == 'Posts')) ...[
           if (_selectedFilter == 'All')
             Padding(
               padding: const EdgeInsets.all(12),
               child: Text(
                 'Posts (${_postResults.length})',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
               ),
             ),
           ..._postResults.map((post) => _buildPostTile(post)),
         ],
 
         // Users results
-        if (_userResults.isNotEmpty && (_selectedFilter == 'All' || _selectedFilter == 'Users')) ...[
+        if (_userResults.isNotEmpty &&
+            (_selectedFilter == 'All' || _selectedFilter == 'Users')) ...[
           if (_selectedFilter == 'All')
             Padding(
               padding: const EdgeInsets.all(12),
               child: Text(
                 'Users (${_userResults.length})',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
               ),
             ),
           ..._userResults.map((user) => _buildUserTile(user)),
@@ -235,16 +236,16 @@ class _SearchScreenState extends State<SearchScreen> {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: ListTile(
-        title: Text(
-          post.caption,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
+        title: Text(post.caption, maxLines: 2, overflow: TextOverflow.ellipsis),
         subtitle: Text(
           '${post.authorName} • ${post.category}',
           style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
         ),
-        trailing: Icon(Icons.arrow_forward_ios, size: 16, color: AppColors.textSecondary),
+        trailing: Icon(
+          Icons.arrow_forward_ios,
+          size: 16,
+          color: AppColors.textSecondary,
+        ),
         onTap: () {
           // Future: Navigate to post detail
           ScaffoldMessenger.of(context).showSnackBar(
@@ -271,10 +272,8 @@ class _SearchScreenState extends State<SearchScreen> {
                     width: 40,
                     height: 40,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => Icon(
-                      Icons.person,
-                      color: AppColors.background,
-                    ),
+                    errorBuilder: (_, _, _) =>
+                        Icon(Icons.person, color: AppColors.background),
                   ),
                 )
               : Icon(Icons.person, color: AppColors.background),
@@ -284,7 +283,11 @@ class _SearchScreenState extends State<SearchScreen> {
           user.role.toStr().toUpperCase(),
           style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
         ),
-        trailing: Icon(Icons.arrow_forward_ios, size: 16, color: AppColors.textSecondary),
+        trailing: Icon(
+          Icons.arrow_forward_ios,
+          size: 16,
+          color: AppColors.textSecondary,
+        ),
         onTap: () {
           Navigator.push(
             context,
@@ -313,16 +316,16 @@ class _SearchScreenState extends State<SearchScreen> {
           const SizedBox(height: 16),
           Text(
             'No results found',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: AppColors.textSecondary,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(color: AppColors.textSecondary),
           ),
           const SizedBox(height: 8),
           Text(
             'Try different keywords',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.textSecondary,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
           ),
         ],
       ),
@@ -343,9 +346,9 @@ class _SearchScreenState extends State<SearchScreen> {
             const SizedBox(height: 16),
             Text(
               'No search history',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(color: AppColors.textSecondary),
             ),
           ],
         ),
@@ -362,14 +365,11 @@ class _SearchScreenState extends State<SearchScreen> {
             children: [
               Text(
                 'Recent Searches',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
               ),
-              TextButton(
-                onPressed: _clearHistory,
-                child: const Text('Clear'),
-              ),
+              TextButton(onPressed: _clearHistory, child: const Text('Clear')),
             ],
           ),
         ),

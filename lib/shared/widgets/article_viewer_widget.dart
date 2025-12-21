@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
 import '../../app/theme/app_colors.dart';
 
 /// Article/Story Viewer Widget
@@ -7,12 +8,14 @@ class ArticleViewerWidget extends StatelessWidget {
   final String content;
   final String title;
   final bool isPreview;
+  final String? imageUrl; // Optional header image
 
   const ArticleViewerWidget({
     super.key,
     required this.content,
     required this.title,
     this.isPreview = false,
+    this.imageUrl,
   });
 
   @override
@@ -85,9 +88,9 @@ class ArticleViewerWidget extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.bookmark_outline),
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Bookmarked!')),
-              );
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('Bookmarked!')));
             },
           ),
           IconButton(
@@ -134,6 +137,16 @@ class ArticleViewerWidget extends StatelessWidget {
             const SizedBox(height: 24),
             const Divider(),
             const SizedBox(height: 24),
+
+            // Display header image if available
+            if (imageUrl != null && imageUrl!.isNotEmpty) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: _buildImage(imageUrl!),
+              ),
+              const SizedBox(height: 24),
+            ],
+
             Text(
               content,
               style: const TextStyle(
@@ -148,9 +161,70 @@ class ArticleViewerWidget extends StatelessWidget {
     );
   }
 
+  Widget _buildImage(String url) {
+    // Check if it's a local file or network URL
+    final bool isLocalFile = url.startsWith('/') || url.startsWith('file://');
+
+    if (isLocalFile) {
+      final filePath = url.replaceFirst('file://', '');
+      final file = File(filePath);
+
+      if (!file.existsSync()) {
+        return _buildImagePlaceholder();
+      }
+
+      return Image.file(
+        file,
+        width: double.infinity,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => _buildImagePlaceholder(),
+      );
+    } else {
+      return Image.network(
+        url,
+        width: double.infinity,
+        fit: BoxFit.cover,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Container(
+            height: 200,
+            color: Colors.grey[200],
+            child: Center(
+              child: CircularProgressIndicator(
+                value: loadingProgress.expectedTotalBytes != null
+                    ? loadingProgress.cumulativeBytesLoaded /
+                          loadingProgress.expectedTotalBytes!
+                    : null,
+              ),
+            ),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) => _buildImagePlaceholder(),
+      );
+    }
+  }
+
+  Widget _buildImagePlaceholder() {
+    return Container(
+      height: 200,
+      decoration: BoxDecoration(
+        color: Colors.grey[200],
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Center(
+        child: Icon(
+          Icons.image_not_supported,
+          size: 64,
+          color: Colors.grey[400],
+        ),
+      ),
+    );
+  }
+
   String _calculateReadTime() {
     final wordCount = content.split(' ').length;
-    final minutes = (wordCount / 200).ceil(); // Average reading speed: 200 words/min
+    final minutes = (wordCount / 200)
+        .ceil(); // Average reading speed: 200 words/min
     return '$minutes min read';
   }
 }

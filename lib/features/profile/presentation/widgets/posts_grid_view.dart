@@ -4,10 +4,11 @@ import '../../../../shared/models/post.dart';
 import '../../../../shared/models/user.dart';
 import '../../../feed/presentation/screens/post_detail_screen.dart';
 import '../../../../core/services/language_service.dart';
+import '../../../../core/localization/app_localizations.dart';
 
 /// Posts Grid View
 /// Displays user's posts in a grid layout
-class PostsGridView extends StatelessWidget {
+class PostsGridView extends StatefulWidget {
   final List<Post> posts;
   final bool isOwnProfile;
   final VoidCallback? onPostTap;
@@ -22,8 +23,32 @@ class PostsGridView extends StatelessWidget {
   });
 
   @override
+  State<PostsGridView> createState() => _PostsGridViewState();
+}
+
+class _PostsGridViewState extends State<PostsGridView> {
+  AppLanguage _currentLanguage = AppLanguage.english;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLanguage();
+  }
+
+  Future<void> _loadLanguage() async {
+    final languageService = await LanguageService.init();
+    if (mounted) {
+      setState(() {
+        _currentLanguage = languageService.currentLanguage;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (posts.isEmpty) {
+    final localizations = AppLocalizations(_currentLanguage);
+
+    if (widget.posts.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -35,18 +60,18 @@ class PostsGridView extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              isOwnProfile ? 'No posts yet' : 'No posts',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
+              localizations.noPostsYet,
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(color: AppColors.textSecondary),
             ),
-            if (isOwnProfile) ...[
+            if (widget.isOwnProfile) ...[
               const SizedBox(height: 8),
               Text(
-                'Start creating content!',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
+                localizations.startCreatingContent,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
               ),
             ],
           ],
@@ -62,9 +87,9 @@ class PostsGridView extends StatelessWidget {
         mainAxisSpacing: 8,
         childAspectRatio: 1,
       ),
-      itemCount: posts.length,
+      itemCount: widget.posts.length,
       itemBuilder: (context, index) {
-        final post = posts[index];
+        final post = widget.posts[index];
         return _buildPostTile(context, post);
       },
     );
@@ -80,7 +105,7 @@ class PostsGridView extends StatelessWidget {
             MaterialPageRoute(
               builder: (_) => PostDetailScreen(
                 post: post,
-                currentUser: currentUser,
+                currentUser: widget.currentUser,
                 currentLanguage: languageService.currentLanguage,
               ),
             ),
@@ -97,7 +122,8 @@ class PostsGridView extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: AppColors.divider),
             ),
-            child: post.contentType == ContentType.image && post.mediaUrl != null
+            child:
+                post.contentType == ContentType.image && post.mediaUrl != null
                 ? ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: Image.network(
@@ -107,12 +133,12 @@ class PostsGridView extends StatelessWidget {
                     ),
                   )
                 : post.contentType == ContentType.video && post.mediaUrl != null
-                    ? _buildVideoThumbnail()
-                    : _buildDefaultThumbnail(post),
+                ? _buildVideoThumbnail()
+                : _buildDefaultThumbnail(post),
           ),
 
           // Status indicator for own profile
-          if (isOwnProfile && post.status != PostStatus.approved)
+          if (widget.isOwnProfile && post.status != PostStatus.approved)
             Positioned(
               top: 4,
               right: 4,
@@ -149,11 +175,7 @@ class PostsGridView extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
-                      Icons.favorite,
-                      color: Colors.white,
-                      size: 12,
-                    ),
+                    const Icon(Icons.favorite, color: Colors.white, size: 12),
                     const SizedBox(width: 4),
                     Text(
                       post.likesCount.toString(),

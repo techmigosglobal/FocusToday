@@ -26,7 +26,9 @@ class PDFViewerWidget extends StatelessWidget {
               onPressed: () {
                 // Future: Implement download functionality
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Download feature coming soon!')),
+                  const SnackBar(
+                    content: Text('Download feature coming soon!'),
+                  ),
                 );
               },
             ),
@@ -40,44 +42,105 @@ class PDFViewerWidget extends StatelessWidget {
   }
 
   Widget _buildPDFViewer() {
-    // Check if file exists
-    final file = File(pdfPath);
-    
+    // Normalize file path
+    String normalizedPath = pdfPath;
+    if (normalizedPath.startsWith('file://')) {
+      normalizedPath = normalizedPath.replaceFirst('file://', '');
+    }
+
+    // Check if it's a network URL
+    final bool isNetworkUrl =
+        normalizedPath.startsWith('http://') ||
+        normalizedPath.startsWith('https://');
+
+    if (isNetworkUrl) {
+      // Load PDF from network
+      try {
+        return Container(
+          color: Colors.grey[200],
+          child: SfPdfViewer.network(
+            normalizedPath,
+            enableDoubleTapZooming: true,
+            enableTextSelection: true,
+            canShowScrollHead: true,
+            canShowScrollStatus: true,
+            onDocumentLoadFailed: (PdfDocumentLoadFailedDetails details) {
+              // Show error message
+              debugPrint('PDF load failed: ${details.error}');
+            },
+          ),
+        );
+      } catch (e) {
+        return _buildErrorView(
+          'Failed to load PDF from network: ${e.toString()}',
+        );
+      }
+    }
+
+    // Load PDF from local file
+    final file = File(normalizedPath);
+
     if (!file.existsSync()) {
-      return Center(
+      return _buildErrorView(
+        'PDF file not found at:\n$normalizedPath\n\nPlease ensure the file exists.',
+      );
+    }
+
+    // Check file size
+    try {
+      final fileSize = file.lengthSync();
+      if (fileSize == 0) {
+        return _buildErrorView('PDF file is empty');
+      }
+    } catch (e) {
+      return _buildErrorView('Cannot read PDF file: ${e.toString()}');
+    }
+
+    // Load the PDF
+    try {
+      return Container(
+        color: Colors.grey[200],
+        child: SfPdfViewer.file(
+          file,
+          enableDoubleTapZooming: true,
+          enableTextSelection: true,
+          canShowScrollHead: true,
+          canShowScrollStatus: true,
+          onDocumentLoadFailed: (PdfDocumentLoadFailedDetails details) {
+            debugPrint('PDF load failed: ${details.error}');
+          },
+        ),
+      );
+    } catch (e) {
+      return _buildErrorView('Error loading PDF: ${e.toString()}');
+    }
+  }
+
+  Widget _buildErrorView(String message) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.picture_as_pdf, size: 64, color: Colors.grey[400]),
+            Icon(Icons.error_outline, size: 64, color: Colors.grey[400]),
             const SizedBox(height: 16),
             Text(
-              'PDF Document',
+              'Cannot Display PDF',
               style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey[600],
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[700],
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              'Tap to view full document',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[500],
-              ),
+              message,
+              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+              textAlign: TextAlign.center,
             ),
           ],
         ),
-      );
-    }
-
-    return Container(
-      color: Colors.grey[200],
-      child: SfPdfViewer.file(
-        file,
-        enableDoubleTapZooming: true,
-        enableTextSelection: true,
-        canShowScrollHead: true,
-        canShowScrollStatus: true,
       ),
     );
   }
@@ -104,7 +167,7 @@ class PDFPreviewWidget extends StatelessWidget {
         children: [
           // PDF Preview
           PDFViewerWidget(pdfPath: pdfPath),
-          
+
           // Overlay with tap hint
           Container(
             decoration: BoxDecoration(
@@ -119,7 +182,7 @@ class PDFPreviewWidget extends StatelessWidget {
               ),
             ),
           ),
-          
+
           // Icon and text
           Positioned(
             bottom: 20,
@@ -127,11 +190,7 @@ class PDFPreviewWidget extends StatelessWidget {
             right: 0,
             child: Column(
               children: [
-                const Icon(
-                  Icons.picture_as_pdf,
-                  size: 48,
-                  color: Colors.white,
-                ),
+                const Icon(Icons.picture_as_pdf, size: 48, color: Colors.white),
                 const SizedBox(height: 8),
                 Text(
                   'Tap to Read PDF',

@@ -9,8 +9,13 @@ import '../../../feed/presentation/screens/feed_screen.dart';
 /// User enters the OTP sent to their phone number
 class OTPVerificationScreen extends StatefulWidget {
   final String phoneNumber;
+  final String verificationId;
 
-  const OTPVerificationScreen({super.key, required this.phoneNumber});
+  const OTPVerificationScreen({
+    super.key,
+    required this.phoneNumber,
+    required this.verificationId,
+  });
 
   @override
   State<OTPVerificationScreen> createState() => _OTPVerificationScreenState();
@@ -25,20 +30,13 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
   bool _isLoading = false;
   bool _isResending = false;
   int _resendCountdown = 30;
+  late String _currentVerificationId; // Store current verification ID
 
   @override
   void initState() {
     super.initState();
+    _currentVerificationId = widget.verificationId; // Initialize with provided ID
     _startResendCountdown();
-
-    // Auto-fill OTP for testing (123456)
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (mounted) {
-        for (int i = 0; i < 6; i++) {
-          _otpControllers[i].text = (i + 1).toString();
-        }
-      }
-    });
   }
 
   @override
@@ -74,35 +72,53 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
 
     setState(() => _isLoading = true);
 
-    // Simulate API call
-    await Future.delayed(const Duration(seconds: 1));
-
-    // Accept any OTP for testing
-    setState(() => _isLoading = false);
-
-    if (mounted) {
-      // Auto-assign role based on phone number
-      final role = AuthRepository.assignRoleByPhoneNumber(widget.phoneNumber);
-
-      // Save session with auto-assigned role
+    try {
       final authRepo = await AuthRepository.init();
-      await authRepo.saveSession(
-        phoneNumber: widget.phoneNumber,
-        displayName:
-            'User ${widget.phoneNumber.substring(widget.phoneNumber.length - 4)}',
-        role: role,
+      final userCredential = await authRepo.verifyOTP(
+        verificationId: _currentVerificationId, // Use current verification ID
+        smsCode: otp,
       );
 
-      // Get current user
-      final user = await authRepo.restoreSession();
+      if (userCredential.user != null) {
+        // Auto-assign role based on phone number
+        final role = AuthRepository.assignRoleByPhoneNumber(widget.phoneNumber);
 
-      if (user != null && mounted) {
-        // Navigate directly to feed (skip role selection)
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => FeedScreen(currentUser: user)),
+        // Save session with auto-assigned role and Firebase UID
+        await authRepo.saveSession(
+          phoneNumber: widget.phoneNumber,
+          displayName:
+              'User ${widget.phoneNumber.length > 4 ? widget.phoneNumber.substring(widget.phoneNumber.length - 4) : ""}',
+          role: role,
+          firebaseUserId: userCredential.user!.uid,
         );
-      } else if (mounted) {
-        _showError('Failed to create session');
+
+        // Get current user
+        final user = await authRepo.restoreSession();
+
+        if (user != null && mounted) {
+          setState(() => _isLoading = false);
+          // Navigate directly to feed
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => FeedScreen(currentUser: user)),
+            (route) => false,
+          );
+        } else if (mounted) {
+          setState(() => _isLoading = false);
+          _showError('Failed to create session');
+        }
+      } else {
+        setState(() => _isLoading = false);
+        _showError('Verification failed');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _showError('Invalid OTP. Please try again.');
+        // Clear OTP fields
+        for (var controller in _otpControllers) {
+          controller.clear();
+        }
+        _focusNodes[0].requestFocus();
       }
     }
   }
@@ -111,19 +127,35 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
   Future<void> _resendOTP() async {
     setState(() => _isResending = true);
 
-    // Simulate API call
-    await Future.delayed(const Duration(seconds: 1));
-
-    setState(() {
-      _isResending = false;
-      _resendCountdown = 30;
-    });
-    _startResendCountdown();
-
-    if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('OTP sent successfully')));
+    try {
+      final authRepo = await AuthRepository.init();
+      await authRepo.signInWithPhoneNumber(
+        phoneNumber: widget.phoneNumber,
+        onCodeSent: (newVerificationId) {
+          if (mounted) {
+            setState(() {
+              _currentVerificationId = newVerificationId; // Update verification ID
+              _isResending = false;
+              _resendCountdown = 30;
+            });
+            _startResendCountdown();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('OTP sent successfully')),
+            );
+          }
+        },
+        onVerificationFailed: (e) {
+          if (mounted) {
+            setState(() => _isResending = false);
+            _showError(e.message ?? 'Failed to resend OTP');
+          }
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isResending = false);
+        _showError('Failed to resend OTP. Please try again.');
+      }
     }
   }
 

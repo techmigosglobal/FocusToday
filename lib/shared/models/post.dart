@@ -191,7 +191,7 @@ class Post {
       'likes_count': likesCount,
       'bookmarks_count': bookmarksCount,
       'shares_count': sharesCount,
-      'is_synced': isSynced ? 1 : 0,
+      'is_synced': isSynced,
       'rejection_reason': rejectionReason,
       'edit_count': editCount,
       'last_edited_at': lastEditedAt?.millisecondsSinceEpoch,
@@ -228,7 +228,7 @@ class Post {
       likesCount: map['likes_count'] ?? 0,
       bookmarksCount: map['bookmarks_count'] ?? 0,
       sharesCount: map['shares_count'] ?? 0,
-      isSynced: map['is_synced'] == 1,
+      isSynced: map['is_synced'] == 1 || map['is_synced'] == true,
       rejectionReason: map['rejection_reason'],
       editCount: map['edit_count'] ?? 0,
       lastEditedAt: map['last_edited_at'] != null

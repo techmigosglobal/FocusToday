@@ -1,9 +1,5 @@
 /// User Roles in EagleTV
-enum UserRole {
-  admin,
-  reporter,
-  publicUser,
-}
+enum UserRole { admin, reporter, publicUser }
 
 /// Extension to convert UserRole to/from string
 extension UserRoleExtension on UserRole {
@@ -36,7 +32,7 @@ class User {
   final bool isSubscribed;
   final DateTime createdAt;
   final String preferredLanguage; // 'en' or 'te'
-  
+
   // Subscription fields
   final String? subscriptionPlanType; // 'free', 'premium', 'elite'
   final DateTime? subscriptionExpiresAt;
@@ -72,7 +68,7 @@ class User {
       'profile_picture': profilePicture,
       'bio': bio,
       'role': role.toStr(),
-      'is_subscribed': isSubscribed ? 1 : 0,
+      'is_subscribed': isSubscribed,
       'preferred_language': preferredLanguage,
       'subscription_plan_type': subscriptionPlanType,
       'subscription_expires_at': subscriptionExpiresAt?.millisecondsSinceEpoch,
@@ -89,7 +85,7 @@ class User {
       profilePicture: map['profile_picture'],
       bio: map['bio'],
       role: UserRoleExtension.fromString(map['role']),
-      isSubscribed: map['is_subscribed'] == 1,
+      isSubscribed: map['is_subscribed'] == 1 || map['is_subscribed'] == true,
       createdAt: DateTime.fromMillisecondsSinceEpoch(map['created_at']),
       preferredLanguage: map['preferred_language'] ?? 'en',
       subscriptionPlanType: map['subscription_plan_type'],
@@ -127,7 +123,8 @@ class User {
       createdAt: createdAt ?? this.createdAt,
       preferredLanguage: preferredLanguage ?? this.preferredLanguage,
       subscriptionPlanType: subscriptionPlanType ?? this.subscriptionPlanType,
-      subscriptionExpiresAt: subscriptionExpiresAt ?? this.subscriptionExpiresAt,
+      subscriptionExpiresAt:
+          subscriptionExpiresAt ?? this.subscriptionExpiresAt,
       postsCount: postsCount ?? this.postsCount,
       followersCount: followersCount ?? this.followersCount,
       followingCount: followingCount ?? this.followingCount,
@@ -135,21 +132,22 @@ class User {
   }
 
   /// Check if user can upload content
-  bool get canUploadContent => role == UserRole.admin || role == UserRole.reporter;
+  bool get canUploadContent =>
+      role == UserRole.admin || role == UserRole.reporter;
 
   /// Check if user can moderate content
   bool get canModerate => role == UserRole.admin;
 
   /// Check if user has access to latest content
-  bool get hasLatestContentAccess => 
+  bool get hasLatestContentAccess =>
       role == UserRole.admin || role == UserRole.reporter || isSubscribed;
-  
+
   /// Check if user has active subscription
   bool get hasActiveSubscription {
     if (subscriptionExpiresAt == null) return false;
     return DateTime.now().isBefore(subscriptionExpiresAt!);
   }
-  
+
   /// Get subscription badge text
   String? get subscriptionBadge {
     if (!hasActiveSubscription) return null;

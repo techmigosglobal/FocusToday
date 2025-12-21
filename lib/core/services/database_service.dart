@@ -26,7 +26,7 @@ class DatabaseService {
     return await openDatabase(
       /* There is a very large truncation here. Total lines: 342 */
       path,
-      version: 3,
+      version: 4,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -59,6 +59,8 @@ class DatabaseService {
         author_name TEXT NOT NULL,
         author_avatar TEXT,
         caption TEXT NOT NULL,
+        caption_te TEXT,
+        caption_hi TEXT,
         media_url TEXT,
         media_type TEXT,
         content_type TEXT,
@@ -162,6 +164,17 @@ class DatabaseService {
       ''');
 
       // Added content type fields to posts table
+    }
+
+    // Migration from version 3 to 4: Add translation fields
+    if (oldVersion < 4) {
+      await db.execute('''
+        ALTER TABLE posts ADD COLUMN caption_te TEXT
+      ''');
+      await db.execute('''
+        ALTER TABLE posts ADD COLUMN caption_hi TEXT
+      ''');
+      // Added translation fields to posts table
     }
   }
 

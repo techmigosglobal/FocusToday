@@ -11,10 +11,7 @@ import '../../../auth/data/repositories/auth_repository.dart';
 class EditProfileScreen extends StatefulWidget {
   final User currentUser;
 
-  const EditProfileScreen({
-    super.key,
-    required this.currentUser,
-  });
+  const EditProfileScreen({super.key, required this.currentUser});
 
   @override
   State<EditProfileScreen> createState() => _EditProfileScreenState();
@@ -95,27 +92,33 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     setState(() => _isSaving = true);
 
     try {
-      String? profilePicturePath;
+      String? profilePictureUrl;
       if (_selectedImage != null) {
-        // Future: Upload to cloud storage in production
-        // For now, use local path
-        profilePicturePath = _selectedImage!.path;
+        // Upload to Supabase Storage
+        profilePictureUrl = await _profileRepo.uploadProfilePicture(
+          userId: widget.currentUser.id,
+          filePath: _selectedImage!.path,
+        );
       }
 
       // Update profile in database
       await _profileRepo.updateProfile(
         userId: widget.currentUser.id,
         displayName: _nameController.text.trim(),
-        bio: _bioController.text.trim().isEmpty ? null : _bioController.text.trim(),
-        profilePicture: profilePicturePath,
+        bio: _bioController.text.trim().isEmpty
+            ? null
+            : _bioController.text.trim(),
+        profilePicture: profilePictureUrl ?? widget.currentUser.profilePicture,
       );
 
       // Update in shared preferences
       final authRepo = await AuthRepository.init();
       await authRepo.updateProfile(
         displayName: _nameController.text.trim(),
-        bio: _bioController.text.trim().isEmpty ? null : _bioController.text.trim(),
-        profilePicture: profilePicturePath,
+        bio: _bioController.text.trim().isEmpty
+            ? null
+            : _bioController.text.trim(),
+        profilePicture: profilePictureUrl ?? widget.currentUser.profilePicture,
       );
 
       if (mounted) {
@@ -198,24 +201,24 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               ),
                             )
                           : widget.currentUser.profilePicture != null
-                              ? ClipOval(
-                                  child: Image.network(
-                                    widget.currentUser.profilePicture!,
-                                    width: 120,
-                                    height: 120,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, _, _) => Icon(
-                                      Icons.person,
-                                      size: 60,
-                                      color: AppColors.background,
-                                    ),
-                                  ),
-                                )
-                              : Icon(
+                          ? ClipOval(
+                              child: Image.network(
+                                widget.currentUser.profilePicture!,
+                                width: 120,
+                                height: 120,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) => Icon(
                                   Icons.person,
                                   size: 60,
                                   color: AppColors.background,
                                 ),
+                              ),
+                            )
+                          : Icon(
+                              Icons.person,
+                              size: 60,
+                              color: AppColors.background,
+                            ),
                     ),
                     Positioned(
                       bottom: 0,
@@ -243,9 +246,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               const SizedBox(height: 8),
               Text(
                 'Tap to change profile picture',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
               ),
               const SizedBox(height: 32),
 

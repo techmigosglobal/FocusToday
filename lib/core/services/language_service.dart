@@ -3,11 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// Language Service
 /// Manages app language and provides translations
-enum AppLanguage {
-  english,
-  telugu,
-  hindi,
-}
+enum AppLanguage { english, telugu, hindi }
 
 extension AppLanguageExtension on AppLanguage {
   String get code {
@@ -71,15 +67,15 @@ class LanguageService extends ChangeNotifier {
   /// Set language
   Future<void> setLanguage(AppLanguage language) async {
     _currentLanguage = language;
-    await _prefs.setString(_keyLanguage, language.code);
     notifyListeners();
+    // Persist async
+    await _prefs.setString(_keyLanguage, language.code);
   }
 
   /// Cycle to next language
   Future<void> cycleLanguage() async {
-    final next = AppLanguage.values[
-        (_currentLanguage.index + 1) % AppLanguage.values.length
-    ];
+    final next = AppLanguage
+        .values[(_currentLanguage.index + 1) % AppLanguage.values.length];
     await setLanguage(next);
   }
 }

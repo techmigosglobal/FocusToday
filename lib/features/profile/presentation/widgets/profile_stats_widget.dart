@@ -26,11 +26,21 @@ class ProfileStatsWidget extends StatelessWidget {
             value: postsCount,
             icon: Icons.article,
           ),
-          Container(
-            width: 1,
-            height: 40,
-            color: AppColors.divider,
+          _buildDivider(),
+          _buildStatItem(
+            context,
+            label: 'Followers',
+            value: 1240, // Mock value
+            icon: Icons.people,
           ),
+          _buildDivider(),
+          _buildStatItem(
+            context,
+            label: 'Following',
+            value: 156, // Mock value
+            icon: Icons.person_add,
+          ),
+          _buildDivider(),
           _buildStatItem(
             context,
             label: 'Bookmarks',
@@ -40,6 +50,10 @@ class ProfileStatsWidget extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Widget _buildDivider() {
+    return Container(width: 1, height: 30, color: AppColors.divider);
   }
 
   Widget _buildStatItem(
@@ -58,18 +72,18 @@ class ProfileStatsWidget extends StatelessWidget {
             Text(
               value.toString(),
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.primary,
-                  ),
+                fontWeight: FontWeight.bold,
+                color: AppColors.primary,
+              ),
             ),
           ],
         ),
         const SizedBox(height: 4),
         Text(
           label,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppColors.textSecondary,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
         ),
       ],
     );

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "984415321614",
+    "project_id": "egaletv-57c7a",
+    "storage_bucket": "egaletv-57c7a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:984415321614:android:c3a00dd1818c3570bd865f",
+        "android_client_info": {
+          "package_name": "com.eagletv.eagle_tv"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD66p02ZdOEM8df2-6eNdzb8ZeFNjFCwvY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

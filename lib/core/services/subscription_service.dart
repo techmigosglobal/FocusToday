@@ -1,14 +1,15 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../shared/models/subscription_plan.dart';
 
 /// Subscription Service
-/// Manages user subscriptions (session-based, resets on logout)
-/// This is a mock implementation for demonstration purposes
+/// Manages user subscriptions (synced with Supabase)
 class SubscriptionService {
   static const String _keySubscriptionType = 'subscription_type';
   static const String _keySubscriptionExpiry = 'subscription_expiry';
 
   final SharedPreferences _prefs;
+  final SupabaseClient _supabase = Supabase.instance.client;
 
   SubscriptionService._(this._prefs);
 
@@ -42,18 +43,27 @@ class SubscriptionService {
   }
 
   /// Subscribe to a plan
-  /// This is a mock implementation - in production, this would integrate with a payment gateway
-  Future<bool> subscribeToPlan(SubscriptionPlan plan) async {
+  Future<bool> subscribeToPlan(SubscriptionPlan plan, {String? userId}) async {
     try {
-      // Save subscription type
+      // 1. Save locally
       await _prefs.setString(_keySubscriptionType, plan.type.toStr());
-
-      // Set expiry date (session will last until app logout or plan duration)
       final expiry = DateTime.now().add(Duration(days: plan.durationDays));
       await _prefs.setInt(
         _keySubscriptionExpiry,
         expiry.millisecondsSinceEpoch,
       );
+
+      // 2. Sync to Supabase
+      if (userId != null) {
+        await _supabase
+            .from('users')
+            .update({
+              'is_subscribed': plan.isPaid,
+              'subscription_plan_type': plan.type.toStr(),
+              'subscription_expires_at': expiry.toIso8601String(),
+            })
+            .eq('id', userId);
+      }
 
       return true;
     } catch (_) {
@@ -117,16 +127,13 @@ class SubscriptionService {
   }
 
   /// Mock payment processing
-  /// In production, this would integrate with payment gateway (Razorpay, Stripe, etc.)
   Future<PaymentResult> processPayment({
     required SubscriptionPlan plan,
     required String paymentMethod,
+    String? userId,
   }) async {
-    // Simulate payment processing delay
-    await Future.delayed(const Duration(seconds: 2));
-
     // Mock success - always returns success for demo
-    await subscribeToPlan(plan);
+    await subscribeToPlan(plan, userId: userId);
     return PaymentResult(
       success: true,
       transactionId: 'TXN${DateTime.now().millisecondsSinceEpoch}',
@@ -137,7 +144,11 @@ class SubscriptionService {
   /// Mock payment (simplified version for UI)
   Future<bool> mockPayment(SubscriptionPlanType planType, String userId) async {
     final plan = SubscriptionPlans.getByType(planType);
-    final result = await processPayment(plan: plan, paymentMethod: 'mock');
+    final result = await processPayment(
+      plan: plan,
+      paymentMethod: 'mock',
+      userId: userId,
+    );
     return result.success;
   }
 }

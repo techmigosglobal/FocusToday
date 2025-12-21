@@ -4,17 +4,18 @@ import '../../../../app/theme/app_colors.dart';
 import '../../../../shared/models/post.dart';
 import '../../../../shared/models/user.dart';
 import '../widgets/vertical_content_card.dart';
-import '../animations/flip_card_animation.dart';
-import '../../data/sample_post_data_enhanced.dart';
-import 'create_post_screen.dart';
-import '../../../moderation/presentation/screens/moderation_screen.dart';
 import '../../data/repositories/post_repository.dart';
+import 'create_post_screen.dart';
 import '../../../profile/presentation/screens/profile_screen.dart';
 import '../../../search/presentation/screens/explore_screen.dart';
+import '../../../moderation/presentation/screens/moderation_screen.dart';
+import '../../../notifications/presentation/screens/notifications_screen.dart';
 import '../../../../core/services/language_service.dart';
+import '../../../../core/localization/app_localizations.dart';
 import '../../../../shared/widgets/skeleton_loader_widget.dart';
+import '../../../../shared/utils/page_transitions.dart';
 
-/// Feed Screen - Vertical flip feed inspired by Way2News
+/// Feed Screen - Standard vertical scrolling feed
 class FeedScreen extends StatefulWidget {
   final User currentUser;
 
@@ -28,13 +29,17 @@ class _FeedScreenState extends State<FeedScreen> {
   List<Post> _posts = [];
   bool _isLoading = true;
   int _pendingCount = 0;
-  late PageController _pageController;
   final PostRepository _postRepo = PostRepository();
   late LanguageService _languageService;
   AppLanguage _currentLanguage = AppLanguage.english;
-  double _scrollOffset = 0.0;
 
   final Set<int> _likedPosts = {};
+  String _selectedCategory = 'All';
+
+  // Page controller for PageView with viewportFraction for card-flip effect
+  final PageController _pageController = PageController(
+    viewportFraction: 0.9, // 90% viewport for card-flip effect
+  );
 
   // Language change listener
   VoidCallback? _languageListener;
@@ -42,12 +47,6 @@ class _FeedScreenState extends State<FeedScreen> {
   @override
   void initState() {
     super.initState();
-    _pageController = PageController();
-    _pageController.addListener(() {
-      setState(() {
-        _scrollOffset = _pageController.offset;
-      });
-    });
     _initLanguage();
     _loadPosts();
   }
@@ -89,24 +88,28 @@ class _FeedScreenState extends State<FeedScreen> {
       // Load pending count for admin
       if (widget.currentUser.role == UserRole.admin) {
         final pending = await _postRepo.getPendingPostsCount();
-        setState(() => _pendingCount = pending);
+        if (mounted) {
+          setState(() => _pendingCount = pending);
+        }
       }
 
-      setState(() {
-        _posts = posts.isNotEmpty ? posts : _generateSamplePosts();
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _posts = posts;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _posts = _generateSamplePosts();
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _posts = [];
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error loading posts: $e')));
+      }
     }
-  }
-
-  List<Post> _generateSamplePosts() {
-    // Import and use enhanced sample data
-    return SamplePostDataEnhanced.generateSamplePosts();
   }
 
   Future<void> _toggleLanguage() async {
@@ -131,6 +134,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final localizations = AppLocalizations(_currentLanguage);
     return Scaffold(
       backgroundColor: AppColors.background,
       body: _isLoading
@@ -139,33 +143,58 @@ class _FeedScreenState extends State<FeedScreen> {
           ? _buildEmptyState()
           : Stack(
               children: [
-                // Vertical PageView with Custom Physics
-                PageView.builder(
-                  controller: _pageController,
-                  scrollDirection: Axis.vertical,
-                  physics: const SnapPageScrollPhysics(),
-                  itemCount: _posts.length,
-                  onPageChanged: (page) => HapticFeedback.selectionClick(),
-                  itemBuilder: (context, index) {
-                    return FlipCardAnimation(
-                      index: index,
-                      scrollOffset: _scrollOffset,
-                      child: VerticalContentCard(
-                        post: _posts[index],
-                        currentLanguage: _currentLanguage,
-                        onLike: () => _toggleLike(index),
-                        onComment: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Comments coming soon!'),
-                              duration: Duration(seconds: 1),
-                            ),
-                          );
-                        },
-                        isLiked: _likedPosts.contains(index),
+                // Main feed content
+                Column(
+                  children: [
+                    // Top spacing for overlay app bar
+                    const SizedBox(height: 110),
+
+                    // Category Bar
+                    _buildCategoryBar(localizations),
+
+                    // PageView for vertical snapping (Way2News style)
+                    Expanded(
+                      child: RefreshIndicator(
+                        onRefresh: _loadPosts,
+                        color: AppColors.primary,
+                        child: _posts.isEmpty
+                            ? _buildEmptyState()
+                            : PageView.builder(
+                                controller: _pageController,
+                                scrollDirection: Axis.vertical,
+                                itemCount: _posts.length,
+                                physics: const BouncingScrollPhysics(),
+                                padEnds: false, // Remove padding for better card-flip effect
+                                itemBuilder: (context, index) {
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 8.0,
+                                      horizontal: 16.0,
+                                    ),
+                                    child: VerticalContentCard(
+                                      post: _posts[index],
+                                      currentLanguage: _currentLanguage,
+                                      onLike: () => _toggleLike(index),
+                                      onComment: () {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              'Comments coming soon!',
+                                            ),
+                                            duration: Duration(seconds: 1),
+                                          ),
+                                        );
+                                      },
+                                      isLiked: _likedPosts.contains(index),
+                                    ),
+                                  );
+                                },
+                              ),
                       ),
-                    );
-                  },
+                    ),
+                  ],
                 ),
 
                 // Top overlay with icons
@@ -209,9 +238,10 @@ class _FeedScreenState extends State<FeedScreen> {
                                       color: Colors.white,
                                     ),
                                     onPressed: () async {
+                                      HapticFeedback.selectionClick();
                                       await Navigator.push(
                                         context,
-                                        MaterialPageRoute(
+                                        SlidePageRoute(
                                           builder: (_) => ModerationScreen(
                                             currentUser: widget.currentUser,
                                           ),
@@ -248,16 +278,53 @@ class _FeedScreenState extends State<FeedScreen> {
                                 ],
                               ),
 
+                            // Notifications icon with badge
+                            Stack(
+                              children: [
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.notifications_outlined,
+                                    color: Colors.white,
+                                  ),
+                                  onPressed: () {
+                                    HapticFeedback.selectionClick();
+                                    Navigator.push(
+                                      context,
+                                      SlidePageRoute(
+                                        builder: (_) => NotificationsScreen(
+                                          currentUser: widget.currentUser,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                                // Mock unread badge for demo
+                                Positioned(
+                                  right: 8,
+                                  top: 8,
+                                  child: Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: const BoxDecoration(
+                                      color: Colors.red,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+
                             // Profile icon
                             IconButton(
                               icon: const Icon(
-                                Icons.person_outline,
+                                Icons.account_circle,
                                 color: Colors.white,
                               ),
                               onPressed: () {
+                                HapticFeedback.selectionClick();
                                 Navigator.push(
                                   context,
-                                  MaterialPageRoute(
+                                  SlidePageRoute(
                                     builder: (_) => ProfileScreen(
                                       currentUser: widget.currentUser,
                                     ),
@@ -280,58 +347,68 @@ class _FeedScreenState extends State<FeedScreen> {
                   ),
                 ),
 
-                // Bottom navigation
+                // Bottom navigation with SafeArea
                 Positioned(
                   bottom: 0,
                   left: 0,
                   right: 0,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.1),
-                          blurRadius: 8,
-                          offset: const Offset(0, -2),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        _buildNavItem(Icons.home, 'Home', true, () {}),
-                        _buildNavItem(
-                          Icons.explore_outlined,
-                          'Explore',
-                          false,
-                          () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => ExploreScreen(
-                                  currentUser: widget.currentUser,
+                  child: SafeArea(
+                    top: false,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.1),
+                            blurRadius: 8,
+                            offset: const Offset(0, -2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _buildNavItem(
+                            Icons.home,
+                            localizations.home,
+                            true,
+                            () {},
+                          ),
+                          _buildNavItem(
+                            Icons.explore_outlined,
+                            localizations.explore,
+                            false,
+                            () {
+                              HapticFeedback.selectionClick();
+                              Navigator.push(
+                                context,
+                                SlidePageRoute(
+                                  builder: (_) => ExploreScreen(
+                                    currentUser: widget.currentUser,
+                                  ),
                                 ),
-                              ),
-                            );
-                          },
-                        ),
-                        _buildNavItem(
-                          Icons.person_outline,
-                          'Profile',
-                          false,
-                          () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => ProfileScreen(
-                                  currentUser: widget.currentUser,
+                              );
+                            },
+                          ),
+                          _buildNavItem(
+                            Icons.person_outline,
+                            localizations.profile,
+                            false,
+                            () {
+                              HapticFeedback.selectionClick();
+                              Navigator.push(
+                                context,
+                                SlidePageRoute(
+                                  builder: (_) => ProfileScreen(
+                                    currentUser: widget.currentUser,
+                                  ),
                                 ),
-                              ),
-                            );
-                          },
-                        ),
-                      ],
+                              );
+                            },
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -342,21 +419,86 @@ class _FeedScreenState extends State<FeedScreen> {
       floatingActionButton:
           (widget.currentUser.role == UserRole.admin ||
               widget.currentUser.role == UserRole.reporter)
-          ? FloatingActionButton(
-              onPressed: () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        CreatePostScreen(currentUser: widget.currentUser),
-                  ),
-                );
-                _loadPosts();
-              },
-              backgroundColor: AppColors.primary,
-              child: const Icon(Icons.add, color: Colors.white),
+          ? SafeArea(
+              child: FloatingActionButton(
+                onPressed: () async {
+                  HapticFeedback.mediumImpact();
+                  await Navigator.push(
+                    context,
+                    ScalePageRoute(
+                      builder: (_) =>
+                          CreatePostScreen(currentUser: widget.currentUser),
+                    ),
+                  );
+                  _loadPosts();
+                },
+                backgroundColor: AppColors.primary,
+                child: const Icon(Icons.add, color: Colors.white),
+              ),
             )
           : null,
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+    );
+  }
+
+  Widget _buildCategoryBar(AppLocalizations localizations) {
+    final categories = [
+      'All',
+      'Technology',
+      'Sports',
+      'Entertainment',
+      'Education',
+      'Business',
+      'Politics',
+      'Health',
+    ];
+
+    return Container(
+      height: 50,
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: categories.length,
+        itemBuilder: (context, index) {
+          final cat = categories[index];
+          final isSelected = _selectedCategory == cat;
+
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              label: Text(
+                cat == 'All' ? 'For You' : cat,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : AppColors.textPrimary,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  fontSize: 13,
+                ),
+              ),
+              selected: isSelected,
+              onSelected: (selected) {
+                if (selected) {
+                  HapticFeedback.lightImpact();
+                  setState(() {
+                    _selectedCategory = cat;
+                    _loadPosts(); // Reload with filter
+                  });
+                }
+              },
+              selectedColor: AppColors.primary,
+              backgroundColor: Colors.white.withValues(alpha: 0.1),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: BorderSide(
+                  color: isSelected ? AppColors.primary : Colors.white24,
+                ),
+              ),
+              showCheckmark: false,
+              elevation: isSelected ? 4 : 0,
+            ),
+          );
+        },
+      ),
     );
   }
 
