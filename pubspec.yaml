@@ -47,10 +47,17 @@ dependencies:
   share_plus: ^7.2.1                # Native sharing
   url_launcher: ^6.2.2              # Open URLs
   permission_handler: ^11.3.1
+  flutter_dotenv: ^5.1.0            # Environment variables
   
   # Notifications & Translation
   flutter_local_notifications: ^19.2.0
   google_mlkit_translation: ^0.12.0
+
+  supabase_flutter: ^2.8.1
+
+  # Firebase Integration (Keeping Core/Auth for now if needed, but switching DB/Storage)
+  firebase_core: ^3.0.0
+  firebase_auth: ^5.0.0
 
 dev_dependencies:
   flutter_test:
@@ -64,5 +71,6 @@ flutter:
   # Assets
   assets:
     - assets/images/
+    - .env
   
   generate: true  # Enable i18n code generation
