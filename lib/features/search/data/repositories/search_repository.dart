@@ -1,213 +1,178 @@
-import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
+import 'package:flutter/foundation.dart';
+
+import '../../../../core/services/cache_service.dart';
+import '../../../../core/services/cloud_functions_service.dart';
+import '../../../../core/services/firestore_service.dart';
 import '../../../../shared/models/post.dart';
 import '../../../../shared/models/user.dart';
-import '../../../../core/services/database_service.dart';
+import '../../../feed/data/repositories/post_repository.dart';
 
-/// Search Repository
-/// Handles all search-related queries using Supabase
 class SearchRepository {
-  final DatabaseService _db = DatabaseService.instance;
-  final supabase.SupabaseClient _supabase = supabase.Supabase.instance.client;
-  static const String _postsTable = 'posts';
-  static const String _usersTable = 'users';
+  final PostRepository _postRepo = PostRepository();
 
-  /// Search posts by caption or hashtags
-  Future<List<Post>> searchPosts(String query) async {
+  Future<List<Post>> searchPosts(
+    String query, {
+    String? category,
+    ContentType? contentType,
+    int limit = 30,
+  }) async {
     if (query.trim().isEmpty) return [];
-
-    try {
-      final List<dynamic> response = await _supabase
-          .from(_postsTable)
-          .select()
-          .eq('status', 'approved')
-          .or('caption.ilike.%$query%,hashtags.ilike.%$query%')
-          .order('created_at', ascending: false)
-          .limit(50);
-      
-      // Alternative if .or() doesn't work: Use textSearch or filter
-      // final response = await _supabase
-      //   .from(_postsTable)
-      //   .select()
-      //   .eq('status', 'approved')
-      //   .or('caption.ilike.%$query%,hashtags.ilike.%$query%')
-      //   .order('created_at', ascending: false)
-      //   .limit(50);
-
-      return response.map((data) => Post.fromMap(data)).toList();
-    } catch (e) {
-      // Fallback to local
-      final db = await _db.database;
-      final searchTerm = '%${query.toLowerCase()}%';
-      final results = await db.rawQuery(
-        '''
-        SELECT * FROM posts 
-        WHERE status = 'approved' 
-        AND (LOWER(caption) LIKE ? OR LOWER(hashtags) LIKE ?)
-        ORDER BY created_at DESC
-        LIMIT 50
-      ''',
-        [searchTerm, searchTerm],
-      );
-      return results.map((map) => Post.fromMap(map)).toList();
-    }
+    return _postRepo.discoverPosts(
+      query: query,
+      category: category,
+      contentType: contentType,
+      limit: limit,
+    );
   }
 
-  /// Search users by display name
   Future<List<User>> searchUsers(String query) async {
     if (query.trim().isEmpty) return [];
-
-    try {
-      final List<dynamic> response = await _supabase
-          .from(_usersTable)
-          .select()
-          .or('display_name.ilike.%$query%,phone_number.ilike.%$query%')
-          .order('display_name', ascending: true)
-          .limit(20);
-
-      return response.map((data) => User.fromMap(data)).toList();
-    } catch (e) {
-      // Fallback to local
-      final db = await _db.database;
-      final searchTerm = '%${query.toLowerCase()}%';
-      final results = await db.rawQuery(
-        '''
-        SELECT * FROM users 
-        WHERE LOWER(display_name) LIKE ? OR LOWER(phone_number) LIKE ?
-        ORDER BY display_name ASC
-        LIMIT 20
-      ''',
-        [searchTerm, searchTerm],
-      );
-      return results.map((map) => User.fromMap(map)).toList();
-    }
-  }
-
-  /// Get posts by specific hashtag
-  Future<List<Post>> searchByHashtag(String hashtag) async {
-    final tag = hashtag.replaceAll('#', '');
-
-    try {
-      final List<dynamic> response = await _supabase
-          .from(_postsTable)
-          .select()
-          .eq('status', 'approved')
-          .ilike('hashtags', '%$tag%')
-          .order('created_at', ascending: false)
-          .limit(50);
-
-      return response.map((data) => Post.fromMap(data)).toList();
-    } catch (e) {
-      // Fallback to local
-      final db = await _db.database;
-      final results = await db.rawQuery(
-        '''
-        SELECT * FROM posts 
-        WHERE status = 'approved' 
-        AND LOWER(hashtags) LIKE ?
-        ORDER BY created_at DESC
-        LIMIT 50
-      ''',
-        ['%$tag%'],
-      );
-      return results.map((map) => Post.fromMap(map)).toList();
-    }
-  }
-
-  /// Get posts by category
-  Future<List<Post>> getPostsByCategory(String category) async {
-    try {
-      final List<dynamic> response = await _supabase
-          .from(_postsTable)
-          .select()
-          .eq('status', 'approved')
-          .eq('category', category)
-          .order('created_at', ascending: false)
-          .limit(50);
-
-      return response.map((data) => Post.fromMap(data)).toList();
-    } catch (e) {
-      final db = await _db.database;
-      final results = await db.query(
-        'posts',
-        where: 'status = ? AND category = ?',
-        whereArgs: ['approved', category],
-        orderBy: 'created_at DESC',
-        limit: 50,
-      );
-      return results.map((map) => Post.fromMap(map)).toList();
-    }
-  }
-
-  /// Get popular hashtags (hashtags with most posts)
-  Future<List<Map<String, dynamic>>> getPopularHashtags({
-    int limit = 10,
-  }) async {
-    // This is better done with a custom RPC in Supabase,
-    // but for demo we can fetch and process or fallback to local
-    final db = await _db.database;
-
-    // Get all approved posts with hashtags
-    final results = await db.query(
-      'posts',
-      columns: ['hashtags'],
-      where: 'status = ? AND hashtags IS NOT NULL AND hashtags != ?',
-      whereArgs: ['approved', ''],
+    final normalized = query.trim().toLowerCase();
+    final cacheKey = 'search_users_$normalized';
+    final cached = CacheService.get(
+      cacheKey,
+      maxAge: const Duration(seconds: 20),
     );
+    if (cached is List) {
+      return cached
+          .whereType<Map>()
+          .map((row) => User.fromMap(Map<String, dynamic>.from(row)))
+          .toList(growable: false);
+    }
 
-    // Count hashtag occurrences
-    final Map<String, int> hashtagCounts = {};
-    for (final row in results) {
-      final hashtagsStr = row['hashtags'] as String?;
-      if (hashtagsStr != null && hashtagsStr.isNotEmpty) {
-        final tags = hashtagsStr.split(',');
-        for (final tag in tags) {
-          if (tag.isNotEmpty) {
-            hashtagCounts[tag] = (hashtagCounts[tag] ?? 0) + 1;
-          }
-        }
+    try {
+      final snapshot = await FirestoreService.users
+          .orderBy('created_at', descending: true)
+          .limit(250)
+          .get();
+      final users = snapshot.docs
+          .map((d) => User.fromMap({'id': d.id, ...d.data()}))
+          .where((u) {
+            final name = u.displayName.toLowerCase();
+            final email = (u.email ?? '').toLowerCase();
+            final phone = u.phoneNumber.toLowerCase();
+            return name.contains(normalized) ||
+                email.contains(normalized) ||
+                phone.contains(normalized);
+          })
+          .toList(growable: false);
+      await CacheService.set(
+        cacheKey,
+        users.map((user) => user.toJson()).toList(growable: false),
+      );
+      return users;
+    } catch (e) {
+      debugPrint('[SearchRepo] searchUsers error: $e');
+      return [];
+    }
+  }
+
+  Future<List<String>> getTrendingHashtags() async {
+    // Check cache first (60-second TTL).
+    const cacheKey = 'trending_hashtags';
+    final cached = CacheService.get(
+      cacheKey,
+      maxAge: const Duration(seconds: 60),
+    );
+    if (cached is List) {
+      return cached.map((e) => e.toString()).toList(growable: false);
+    }
+
+    // Prefer Cloud Function for server-side aggregation.
+    try {
+      final result = await CloudFunctionsService.instance
+          .httpsCallable('getTrendingHashtags')
+          .call(<String, dynamic>{});
+      final data = Map<String, dynamic>.from(result.data as Map);
+      final hashtags = (data['hashtags'] as List? ?? [])
+          .map((e) => (e as Map)['tag']?.toString() ?? '')
+          .where((t) => t.isNotEmpty)
+          .toList(growable: false);
+      await CacheService.set(cacheKey, hashtags);
+      return hashtags;
+    } catch (e) {
+      debugPrint(
+        '[SearchRepo] getTrendingHashtags CF failed, falling back: $e',
+      );
+    }
+
+    // Fallback: client-side aggregation from trending posts (limited set).
+    final posts = await _postRepo.getTrendingPosts(limit: 30);
+    if (posts.isEmpty) return [];
+
+    final score = <String, int>{};
+    for (final post in posts) {
+      for (final tag in post.hashtags) {
+        final normalized = tag.trim().toLowerCase();
+        if (normalized.isEmpty) continue;
+        score[normalized] = (score[normalized] ?? 0) + 1;
+      }
+      if (post.hashtags.isEmpty && post.category.trim().isNotEmpty) {
+        final categoryTag = post.category.trim().toLowerCase();
+        score[categoryTag] = (score[categoryTag] ?? 0) + 1;
       }
     }
 
-    // Sort by count and return top hashtags
-    final sorted = hashtagCounts.entries.toList()
+    final sorted = score.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
-
-    return sorted.take(limit).map((entry) {
-      return {'hashtag': entry.key, 'count': entry.value};
-    }).toList();
+    final result = sorted.take(12).map((e) => '#${e.key}').toList();
+    await CacheService.set(cacheKey, result);
+    return result;
   }
 
-  /// Get trending posts (most liked in last 7 days)
-  Future<List<Post>> getTrendingPosts({int limit = 10}) async {
+  Future<List<String>> getPopularHashtags() async => getTrendingHashtags();
+  Future<List<Post>> getTrendingPosts({int limit = 15}) async =>
+      _postRepo.getTrendingPosts(limit: limit);
+  Future<List<Post>> getRecommendedPosts(
+    String userId, {
+    int limit = 15,
+  }) async => _postRepo.getRecommendedPosts(userId, limit: limit);
+  Future<List<Post>> getRelatedPosts(String postId, {int limit = 12}) async =>
+      _postRepo.getRelatedPosts(postId, limit: limit);
+  Future<List<Post>> getPostsByCategory(String category) async =>
+      _postRepo.discoverPosts(category: category, limit: 30);
+
+  Future<List<Post>> searchByHashtag(String hashtag) async {
+    final normalized = hashtag.replaceAll('#', '').trim();
+    if (normalized.isEmpty) return [];
+    return _postRepo.discoverPosts(query: normalized, limit: 30);
+  }
+
+  Future<List<Map<String, String>>> getSuggestedUsers() async {
+    const cacheKey = 'search_suggested_users';
+    final cached = CacheService.get(
+      cacheKey,
+      maxAge: const Duration(minutes: 1),
+    );
+    if (cached is List) {
+      return cached
+          .whereType<Map>()
+          .map(
+            (row) => Map<String, String>.from(
+              row.map((key, value) => MapEntry('$key', '$value')),
+            ),
+          )
+          .toList(growable: false);
+    }
+
     try {
-      final sevenDaysAgo = DateTime.now()
-          .subtract(const Duration(days: 7))
-          .toIso8601String();
-
-      final List<dynamic> response = await _supabase
-          .from(_postsTable)
-          .select()
-          .eq('status', 'approved')
-          .gte('created_at', sevenDaysAgo)
-          .order('likes_count', ascending: false)
-          .limit(limit);
-
-      return response.map((data) => Post.fromMap(data)).toList();
+      final snapshot = await FirestoreService.users
+          .orderBy('created_at', descending: true)
+          .limit(20)
+          .get();
+      final users = snapshot.docs
+          .map(
+            (d) => {
+              'name': (d.data()['display_name'] ?? 'Unknown').toString(),
+              'id': d.id,
+            },
+          )
+          .toList(growable: false);
+      await CacheService.set(cacheKey, users);
+      return users;
     } catch (e) {
-      final db = await _db.database;
-      final sevenDaysAgoEpoch = DateTime.now()
-          .subtract(const Duration(days: 7))
-          .millisecondsSinceEpoch;
-
-      final results = await db.query(
-        'posts',
-        where: 'status = ? AND created_at >= ?',
-        whereArgs: ['approved', sevenDaysAgoEpoch],
-        orderBy: 'likes_count DESC, created_at DESC',
-        limit: limit,
-      );
-
-      return results.map((map) => Post.fromMap(map)).toList();
+      debugPrint('[SearchRepo] getSuggestedUsers error: $e');
+      return [];
     }
   }
 }

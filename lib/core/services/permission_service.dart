@@ -1,3 +1,4 @@
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -19,12 +20,12 @@ class PermissionService {
     }
 
     // Show rationale dialog before requesting
-    if (context.mounted) {
+    if (context.mounted && _canShowMaterialDialogs(context)) {
       final shouldRequest = await _showPermissionRationaleDialog(
         context,
         title: 'Storage Permission Required',
         message:
-            'EagleTV needs access to your photos and videos to:\n\n'
+            'Focus Today needs access to your photos and videos to:\n\n'
             '• Upload images and videos to create posts\n'
             '• Save media to your device\n'
             '• Access your camera to capture photos',
@@ -40,7 +41,7 @@ class PermissionService {
     final result = await _requestStoragePermission();
 
     // Handle denial
-    if (!result && context.mounted) {
+    if (!result && context.mounted && _canShowMaterialDialogs(context)) {
       await _showPermissionDeniedDialog(
         context,
         title: 'Storage Permission Denied',
@@ -63,12 +64,12 @@ class PermissionService {
     }
 
     // Show rationale dialog
-    if (context.mounted) {
+    if (context.mounted && _canShowMaterialDialogs(context)) {
       final shouldRequest = await _showPermissionRationaleDialog(
         context,
         title: 'Notification Permission',
         message:
-            'EagleTV would like to send you notifications for:\n\n'
+            'Focus Today would like to send you notifications for:\n\n'
             '• New posts from sources you follow\n'
             '• Breaking news alerts\n'
             '• Comments and likes on your posts\n'
@@ -95,12 +96,12 @@ class PermissionService {
       return true;
     }
 
-    if (context.mounted) {
+    if (context.mounted && _canShowMaterialDialogs(context)) {
       final shouldRequest = await _showPermissionRationaleDialog(
         context,
         title: 'Camera Permission Required',
         message:
-            'EagleTV needs camera access to capture photos and videos for your posts.',
+            'Focus Today needs camera access to capture photos and videos for your posts.',
         icon: Icons.camera_alt,
       );
 
@@ -111,7 +112,9 @@ class PermissionService {
 
     final result = await Permission.camera.request();
 
-    if (!result.isGranted && context.mounted) {
+    if (!result.isGranted &&
+        context.mounted &&
+        _canShowMaterialDialogs(context)) {
       await _showPermissionDeniedDialog(
         context,
         title: 'Camera Permission Denied',
@@ -185,9 +188,15 @@ class PermissionService {
 
   /// Check if Android version is 13 or higher
   Future<bool> _isAndroid13OrHigher() async {
-    // This is a simplified check - in production, use platform channels
-    // or package_info_plus to get actual Android version
-    return true; // Assume modern Android for now
+    final deviceInfo = DeviceInfoPlugin();
+    try {
+      final androidInfo = await deviceInfo.androidInfo;
+      // Android 13 = API level 33
+      return androidInfo.version.sdkInt >= 33;
+    } catch (e) {
+      // Fallback to false for safety on unknown platforms
+      return false;
+    }
   }
 
   /// Show permission rationale dialog
@@ -235,6 +244,14 @@ class PermissionService {
     );
 
     return result ?? false;
+  }
+
+  bool _canShowMaterialDialogs(BuildContext context) {
+    return Localizations.of<MaterialLocalizations>(
+          context,
+          MaterialLocalizations,
+        ) !=
+        null;
   }
 
   /// Show permission denied dialog with option to go to settings

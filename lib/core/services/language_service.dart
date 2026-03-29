@@ -3,7 +3,22 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// Language Service
 /// Manages app language and provides translations
-enum AppLanguage { english, telugu, hindi }
+enum AppLanguage {
+  english,
+  telugu,
+  hindi;
+
+  static AppLanguage fromCode(String code) {
+    switch (code) {
+      case 'te':
+        return AppLanguage.telugu;
+      case 'hi':
+        return AppLanguage.hindi;
+      default:
+        return AppLanguage.english;
+    }
+  }
+}
 
 extension AppLanguageExtension on AppLanguage {
   String get code {
@@ -27,21 +42,12 @@ extension AppLanguageExtension on AppLanguage {
         return 'हिंदी';
     }
   }
-
-  static AppLanguage fromCode(String code) {
-    switch (code) {
-      case 'te':
-        return AppLanguage.telugu;
-      case 'hi':
-        return AppLanguage.hindi;
-      default:
-        return AppLanguage.english;
-    }
-  }
 }
 
 class LanguageService extends ChangeNotifier {
   static const String _keyLanguage = 'app_language';
+  static LanguageService? _instance;
+  static Future<LanguageService>? _inFlightInit;
   final SharedPreferences _prefs;
   AppLanguage _currentLanguage = AppLanguage.english;
 
@@ -51,8 +57,19 @@ class LanguageService extends ChangeNotifier {
 
   /// Initialize service
   static Future<LanguageService> init() async {
-    final prefs = await SharedPreferences.getInstance();
-    return LanguageService(prefs);
+    final cached = _instance;
+    if (cached != null) return cached;
+
+    final existingInit = _inFlightInit;
+    if (existingInit != null) return existingInit;
+
+    _inFlightInit = SharedPreferences.getInstance().then((prefs) {
+      final service = LanguageService(prefs);
+      _instance = service;
+      _inFlightInit = null;
+      return service;
+    });
+    return _inFlightInit!;
   }
 
   /// Get current language
@@ -61,7 +78,7 @@ class LanguageService extends ChangeNotifier {
   /// Load saved language
   void _loadLanguage() {
     final code = _prefs.getString(_keyLanguage) ?? 'en';
-    _currentLanguage = AppLanguageExtension.fromCode(code);
+    _currentLanguage = AppLanguage.fromCode(code);
   }
 
   /// Set language

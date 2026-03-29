@@ -19,6 +19,20 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
+// Suppress deprecation & unchecked warnings from third-party plugins
+// (google_mlkit_commons, razorpay_flutter, etc.)
+subprojects {
+    tasks.withType<JavaCompile>().configureEach {
+        options.compilerArgs.addAll(
+            listOf(
+                "-Xlint:-options",
+                "-Xlint:-deprecation",
+                "-Xlint:-unchecked"
+            )
+        )
+    }
+}
+
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }

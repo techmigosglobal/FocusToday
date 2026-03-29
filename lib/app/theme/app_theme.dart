@@ -3,7 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
 import 'app_dimensions.dart';
 
-/// EagleTV Theme Configuration
+/// Focus Today Theme Configuration
 /// Provides light and dark themes following the Empathy Canvas design system
 class AppTheme {
   // Private constructor
@@ -20,6 +20,17 @@ class AppTheme {
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
+
+      // Smooth page transitions on all platforms
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.linux: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.windows: CupertinoPageTransitionsBuilder(),
+        },
+      ),
 
       // Color Scheme
       colorScheme: ColorScheme.light(
@@ -58,12 +69,44 @@ class AppTheme {
 
       // Card Theme
       cardTheme: CardThemeData(
-        color: AppColors.surface,
+        color: AppColors.surfaceTier1,
         elevation: AppDimensions.elevationCard,
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppDimensions.borderRadiusCard),
         ),
-        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      ),
+
+      // Dialog Theme
+      dialogTheme: DialogThemeData(
+        backgroundColor: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppDimensions.borderRadiusLarge),
+        ),
+        titleTextStyle: GoogleFonts.plusJakartaSans(
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+          color: AppColors.textPrimary,
+        ),
+      ),
+
+      // Bottom Sheet Theme
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppDimensions.borderRadiusBottomSheet),
+          ),
+        ),
+        showDragHandle: true,
+        dragHandleColor: AppColors.divider,
+        dragHandleSize: const Size(
+          AppDimensions.dragHandleWidth,
+          AppDimensions.dragHandleHeight,
+        ),
       ),
 
       // Elevated Button Theme
@@ -124,7 +167,7 @@ class AppTheme {
       // Input Decoration Theme
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.surface,
+        fillColor: AppColors.surfaceTier2,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 14,
@@ -152,20 +195,55 @@ class AppTheme {
       ),
 
       // Bottom Navigation Bar Theme
-      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+      bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: AppColors.surface,
         selectedItemColor: AppColors.primary,
-        unselectedItemColor: AppColors.secondary,
+        unselectedItemColor: AppColors.textSecondary,
         type: BottomNavigationBarType.fixed,
-        elevation: 8,
-        selectedLabelStyle: TextStyle(
-          fontSize: 12,
+        elevation: 0,
+        selectedLabelStyle: GoogleFonts.plusJakartaSans(
+          fontSize: 11,
           fontWeight: FontWeight.w600,
         ),
-        unselectedLabelStyle: TextStyle(
-          fontSize: 12,
+        unselectedLabelStyle: GoogleFonts.plusJakartaSans(
+          fontSize: 11,
           fontWeight: FontWeight.w400,
         ),
+      ),
+
+      // Navigation Bar Theme (Material 3)
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: AppColors.surfaceTier1,
+        surfaceTintColor: Colors.transparent,
+        indicatorColor: AppColors.primary.withValues(alpha: 0.12),
+        height: AppDimensions.bottomNavHeight,
+        elevation: 0,
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return GoogleFonts.plusJakartaSans(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: AppColors.primary,
+            );
+          }
+          return GoogleFonts.plusJakartaSans(
+            fontSize: 11,
+            fontWeight: FontWeight.w400,
+            color: AppColors.textSecondary,
+          );
+        }),
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return const IconThemeData(
+              color: AppColors.primary,
+              size: AppDimensions.bottomNavIconSize,
+            );
+          }
+          return const IconThemeData(
+            color: AppColors.textSecondary,
+            size: AppDimensions.bottomNavIconSize,
+          );
+        }),
       ),
 
       // Floating Action Button Theme
@@ -221,9 +299,20 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
 
+      // Smooth page transitions on all platforms
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.linux: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.windows: CupertinoPageTransitionsBuilder(),
+        },
+      ),
+
       // Color Scheme
       colorScheme: ColorScheme.dark(
-        primary: AppColors.primary,
+        primary: const Color(0xFF5B8DEF), // Brighter primary for dark mode
         secondary: AppColors.secondary,
         tertiary: AppColors.accent,
         surface: AppColors.surfaceDark,
@@ -232,6 +321,7 @@ class AppTheme {
         onSecondary: Colors.white,
         onSurface: AppColors.textPrimaryDark,
         onError: Colors.white,
+        outline: AppColors.textSecondaryDark.withValues(alpha: 0.3),
       ),
 
       scaffoldBackgroundColor: AppColors.backgroundDark,
@@ -241,27 +331,32 @@ class AppTheme {
 
       // App Bar Theme
       appBarTheme: AppBarTheme(
-        backgroundColor: AppColors.backgroundDark,
-        foregroundColor: Colors.white,
+        backgroundColor: AppColors.surfaceDark,
+        foregroundColor: AppColors.textPrimaryDark,
         elevation: 0,
         centerTitle: false,
+        surfaceTintColor: Colors.transparent,
         titleTextStyle: GoogleFonts.plusJakartaSans(
           fontSize: 20,
           fontWeight: FontWeight.w600,
-          color: Colors.white,
+          color: AppColors.textPrimaryDark,
         ),
         iconTheme: const IconThemeData(
-          color: Colors.white,
+          color: AppColors.textPrimaryDark,
           size: AppDimensions.iconMedium,
         ),
       ),
 
       // Card Theme
       cardTheme: CardThemeData(
-        color: AppColors.surfaceDark,
-        elevation: AppDimensions.elevationCard,
+        color: AppColors.surfaceTier1Dark,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppDimensions.borderRadiusCard),
+          side: BorderSide(
+            color: AppColors.textSecondaryDark.withValues(alpha: 0.15),
+          ),
         ),
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       ),
@@ -269,7 +364,7 @@ class AppTheme {
       // Elevated Button Theme (same as light)
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primary,
+          backgroundColor: const Color(0xFF5B8DEF),
           foregroundColor: Colors.white,
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
@@ -289,48 +384,207 @@ class AppTheme {
         ),
       ),
 
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: const Color(0xFF8AB4FF),
+          textStyle: GoogleFonts.plusJakartaSans(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+          minimumSize: const Size(
+            AppDimensions.minTouchTarget,
+            AppDimensions.minTouchTarget,
+          ),
+        ),
+      ),
+
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: const Color(0xFF8AB4FF),
+          side: BorderSide(
+            color: const Color(0xFF8AB4FF).withValues(alpha: 0.55),
+            width: 1.4,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(
+              AppDimensions.borderRadiusButton,
+            ),
+          ),
+          minimumSize: const Size(
+            AppDimensions.minTouchTarget,
+            AppDimensions.minTouchTarget,
+          ),
+        ),
+      ),
+
       // Input Decoration Theme
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.surfaceDark,
+        fillColor: AppColors.surfaceTier2Dark,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 14,
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppDimensions.borderRadiusInput),
-          borderSide: const BorderSide(color: AppColors.textSecondaryDark),
+          borderSide: BorderSide(
+            color: AppColors.textSecondaryDark.withValues(alpha: 0.3),
+          ),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppDimensions.borderRadiusInput),
-          borderSide: const BorderSide(color: AppColors.textSecondaryDark),
+          borderSide: BorderSide(
+            color: AppColors.textSecondaryDark.withValues(alpha: 0.3),
+          ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppDimensions.borderRadiusInput),
-          borderSide: const BorderSide(color: AppColors.primary, width: 2),
+          borderSide: const BorderSide(color: Color(0xFF5B8DEF), width: 2),
+        ),
+        labelStyle: const TextStyle(color: AppColors.textSecondaryDark),
+        hintStyle: TextStyle(
+          color: AppColors.textSecondaryDark.withValues(alpha: 0.6),
         ),
       ),
 
       // Bottom Navigation Bar Theme
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
         backgroundColor: AppColors.surfaceDark,
-        selectedItemColor: AppColors.secondary,
+        selectedItemColor: Color(0xFF5B8DEF),
         unselectedItemColor: AppColors.textSecondaryDark,
         type: BottomNavigationBarType.fixed,
-        elevation: 8,
+        elevation: 0,
       ),
 
-      // Floating Action Button Theme (same as light)
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: AppColors.surfaceTier1Dark,
+        surfaceTintColor: Colors.transparent,
+        indicatorColor: const Color(0xFF5B8DEF).withValues(alpha: 0.2),
+        height: AppDimensions.bottomNavHeight,
+        elevation: 0,
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return GoogleFonts.plusJakartaSans(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF8AB4FF),
+            );
+          }
+          return GoogleFonts.plusJakartaSans(
+            fontSize: 11,
+            fontWeight: FontWeight.w400,
+            color: AppColors.textSecondaryDark,
+          );
+        }),
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return const IconThemeData(
+              color: Color(0xFF8AB4FF),
+              size: AppDimensions.bottomNavIconSize,
+            );
+          }
+          return const IconThemeData(
+            color: AppColors.textSecondaryDark,
+            size: AppDimensions.bottomNavIconSize,
+          );
+        }),
+      ),
+
+      // Floating Action Button Theme
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
-        backgroundColor: AppColors.accent,
+        backgroundColor: Color(0xFF5B8DEF),
         foregroundColor: Colors.white,
         elevation: AppDimensions.elevationFAB,
+      ),
+
+      // Divider Theme
+      dividerTheme: DividerThemeData(
+        color: AppColors.textSecondaryDark.withValues(alpha: 0.15),
+        thickness: 1,
+        space: 1,
+      ),
+
+      // Snackbar Theme
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: AppColors.surfaceDarkElevated,
+        contentTextStyle: GoogleFonts.plusJakartaSans(
+          fontSize: 14,
+          color: AppColors.textPrimaryDark,
+        ),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
 
       // Icon Theme
       iconTheme: const IconThemeData(
         color: AppColors.textPrimaryDark,
         size: AppDimensions.iconMedium,
+      ),
+
+      // Dialog Theme
+      dialogTheme: DialogThemeData(
+        backgroundColor: AppColors.surfaceDark,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      ),
+
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: AppColors.surfaceDark,
+        surfaceTintColor: Colors.transparent,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppDimensions.borderRadiusBottomSheet),
+          ),
+        ),
+        showDragHandle: true,
+        dragHandleColor: AppColors.textSecondaryDark.withValues(alpha: 0.4),
+      ),
+
+      // Popup Menu Theme
+      popupMenuTheme: PopupMenuThemeData(
+        color: AppColors.surfaceDark,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+
+      tabBarTheme: TabBarThemeData(
+        labelColor: AppColors.textPrimaryDark,
+        unselectedLabelColor: AppColors.textSecondaryDark,
+        indicatorColor: const Color(0xFF8AB4FF),
+        dividerColor: AppColors.textSecondaryDark.withValues(alpha: 0.2),
+      ),
+
+      chipTheme: ChipThemeData(
+        backgroundColor: AppColors.surfaceDarkElevated,
+        selectedColor: const Color(0xFF8AB4FF).withValues(alpha: 0.18),
+        disabledColor: AppColors.surfaceDark,
+        side: BorderSide(
+          color: AppColors.textSecondaryDark.withValues(alpha: 0.3),
+        ),
+        labelStyle: GoogleFonts.plusJakartaSans(
+          fontSize: 13,
+          color: AppColors.textPrimaryDark,
+          fontWeight: FontWeight.w500,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppDimensions.borderRadiusChip),
+        ),
+      ),
+
+      // Switch Theme
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return const Color(0xFF5B8DEF);
+          }
+          return AppColors.textSecondaryDark;
+        }),
+        trackColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return const Color(0xFF5B8DEF).withValues(alpha: 0.3);
+          }
+          return AppColors.textSecondaryDark.withValues(alpha: 0.2);
+        }),
       ),
     );
   }
@@ -352,34 +606,34 @@ class AppTheme {
         height: 1.4,
       ),
       displaySmall: GoogleFonts.plusJakartaSans(
-        fontSize: 24,
-        fontWeight: FontWeight.w700,
+        fontSize: 25,
+        fontWeight: FontWeight.w800,
         color: textColor,
-        height: 1.5,
+        height: 1.35,
       ),
       headlineMedium: GoogleFonts.plusJakartaSans(
-        fontSize: 20,
-        fontWeight: FontWeight.w600,
+        fontSize: 21,
+        fontWeight: FontWeight.w700,
         color: textColor,
-        height: 1.5,
+        height: 1.35,
       ),
       titleLarge: GoogleFonts.plusJakartaSans(
-        fontSize: 18,
-        fontWeight: FontWeight.w600,
+        fontSize: 19,
+        fontWeight: FontWeight.w700,
         color: textColor,
-        height: 1.5,
+        height: 1.3,
       ),
       bodyLarge: GoogleFonts.plusJakartaSans(
         fontSize: 16,
-        fontWeight: FontWeight.w400,
+        fontWeight: FontWeight.w500,
         color: textColor,
-        height: 1.5,
+        height: 1.55,
       ),
       bodyMedium: GoogleFonts.plusJakartaSans(
         fontSize: 14,
-        fontWeight: FontWeight.w400,
+        fontWeight: FontWeight.w500,
         color: textColor,
-        height: 1.5,
+        height: 1.55,
       ),
       labelLarge: GoogleFonts.plusJakartaSans(
         fontSize: 16,

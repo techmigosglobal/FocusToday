@@ -1,17 +1,25 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../shared/models/user.dart';
 import '../../../../core/services/media_picker_service.dart';
 import '../../data/repositories/profile_repository.dart';
 import '../../../auth/data/repositories/auth_repository.dart';
+import '../../../../core/services/language_service.dart';
+import '../../../../core/localization/app_localizations.dart';
 
 /// Edit Profile Screen
 /// Allows users to edit their profile information
 class EditProfileScreen extends StatefulWidget {
   final User currentUser;
+  final AppLanguage currentLanguage;
 
-  const EditProfileScreen({super.key, required this.currentUser});
+  const EditProfileScreen({
+    super.key,
+    required this.currentUser,
+    required this.currentLanguage,
+  });
 
   @override
   State<EditProfileScreen> createState() => _EditProfileScreenState();
@@ -21,30 +29,52 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _bioController = TextEditingController();
+  final _areaController = TextEditingController();
+  final _districtController = TextEditingController();
+  final _stateController = TextEditingController();
   final MediaPickerService _mediaPicker = MediaPickerService();
   final ProfileRepository _profileRepo = ProfileRepository();
 
   File? _selectedImage;
   bool _isSaving = false;
 
+  Color _iconChipBg({Color? seed}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final base = seed ?? AppColors.primaryOf(context);
+    return isDark ? base.withValues(alpha: 0.28) : base.withValues(alpha: 0.1);
+  }
+
+  Color _iconChipFg({Color? seed}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return isDark
+        ? AppColors.onPrimaryOf(context)
+        : (seed ?? AppColors.primary);
+  }
+
   @override
   void initState() {
     super.initState();
     _nameController.text = widget.currentUser.displayName;
     _bioController.text = widget.currentUser.bio ?? '';
+    _areaController.text = widget.currentUser.area ?? '';
+    _districtController.text = widget.currentUser.district ?? '';
+    _stateController.text = widget.currentUser.state ?? '';
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _bioController.dispose();
+    _areaController.dispose();
+    _districtController.dispose();
+    _stateController.dispose();
     super.dispose();
   }
 
   Future<void> _pickProfilePicture() async {
     final source = await showModalBottomSheet<String>(
       context: context,
-      backgroundColor: AppColors.surface,
+      backgroundColor: AppColors.surfaceOf(context),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -53,13 +83,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: Icon(Icons.photo_library, color: AppColors.primary),
-              title: const Text('Choose from Gallery'),
+              leading: Icon(
+                Icons.photo_library,
+                color: _iconChipFg(seed: AppColors.primary),
+              ),
+              title: Text(
+                AppLocalizations(widget.currentLanguage).chooseFromGallery,
+              ),
               onTap: () => Navigator.pop(context, 'gallery'),
             ),
             ListTile(
-              leading: Icon(Icons.camera_alt, color: AppColors.primary),
-              title: const Text('Take Photo'),
+              leading: Icon(
+                Icons.camera_alt,
+                color: _iconChipFg(seed: AppColors.primary),
+              ),
+              title: Text(AppLocalizations(widget.currentLanguage).takePhoto),
               onTap: () => Navigator.pop(context, 'camera'),
             ),
             const SizedBox(height: 8),
@@ -94,10 +132,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     try {
       String? profilePictureUrl;
       if (_selectedImage != null) {
-        // Upload to Supabase Storage
+        // Upload to storage (demo mode - returns local path)
         profilePictureUrl = await _profileRepo.uploadProfilePicture(
-          userId: widget.currentUser.id,
-          filePath: _selectedImage!.path,
+          _selectedImage!.path,
+          widget.currentUser.id,
         );
       }
 
@@ -109,6 +147,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ? null
             : _bioController.text.trim(),
         profilePicture: profilePictureUrl ?? widget.currentUser.profilePicture,
+        area: _areaController.text.trim().isEmpty
+            ? null
+            : _areaController.text.trim(),
+        district: _districtController.text.trim().isEmpty
+            ? null
+            : _districtController.text.trim(),
+        state: _stateController.text.trim().isEmpty
+            ? null
+            : _stateController.text.trim(),
       );
 
       // Update in shared preferences
@@ -119,13 +166,26 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ? null
             : _bioController.text.trim(),
         profilePicture: profilePictureUrl ?? widget.currentUser.profilePicture,
+        area: _areaController.text.trim().isEmpty
+            ? null
+            : _areaController.text.trim(),
+        district: _districtController.text.trim().isEmpty
+            ? null
+            : _districtController.text.trim(),
+        state: _stateController.text.trim().isEmpty
+            ? null
+            : _stateController.text.trim(),
+        syncRemote: false,
+        notifyUserSync: true,
       );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Profile updated successfully!'),
-            backgroundColor: Colors.green,
+          SnackBar(
+            content: Text(
+              AppLocalizations(widget.currentLanguage).profileUpdatedSuccess,
+            ),
+            backgroundColor: AppColors.successOf(context),
           ),
         );
         Navigator.pop(context, true); // Return true to indicate success
@@ -135,7 +195,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error updating profile: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppColors.errorOf(context),
           ),
         );
       }
@@ -148,9 +208,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final localizations = AppLocalizations(widget.currentLanguage);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Edit Profile'),
+        title: Text(localizations.editProfile),
         actions: [
           if (_isSaving)
             const Center(
@@ -167,7 +228,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             TextButton(
               onPressed: _saveProfile,
               child: Text(
-                'SAVE',
+                AppLocalizations(widget.currentLanguage).save,
                 style: TextStyle(
                   color: AppColors.secondary,
                   fontWeight: FontWeight.bold,
@@ -202,12 +263,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             )
                           : widget.currentUser.profilePicture != null
                           ? ClipOval(
-                              child: Image.network(
-                                widget.currentUser.profilePicture!,
+                              child: CachedNetworkImage(
+                                imageUrl: widget.currentUser.profilePicture!,
                                 width: 120,
                                 height: 120,
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) => Icon(
+                                errorWidget: (_, _, _) => Icon(
                                   Icons.person,
                                   size: 60,
                                   color: AppColors.background,
@@ -233,9 +294,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             width: 2,
                           ),
                         ),
-                        child: const Icon(
+                        child: Icon(
                           Icons.camera_alt,
-                          color: Colors.white,
+                          color: AppColors.onPrimaryOf(context),
                           size: 20,
                         ),
                       ),
@@ -245,10 +306,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Tap to change profile picture',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+                localizations.tapToChangeProfilePicture,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).textTheme.bodySmall?.color,
+                ),
               ),
               const SizedBox(height: 32),
 
@@ -256,7 +317,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               TextFormField(
                 controller: _nameController,
                 decoration: InputDecoration(
-                  labelText: 'Display Name',
+                  labelText: localizations.displayName,
                   prefixIcon: const Icon(Icons.person),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -268,10 +329,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
-                    return 'Please enter a display name';
+                    return localizations.nameRequired;
                   }
                   if (value.trim().length < 2) {
-                    return 'Name must be at least 2 characters';
+                    return localizations.nameMinLength;
                   }
                   return null;
                 },
@@ -284,9 +345,64 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 maxLines: 4,
                 maxLength: 150,
                 decoration: InputDecoration(
-                  labelText: 'Bio (Optional)',
+                  labelText: '${localizations.bio} (${localizations.optional})',
                   prefixIcon: const Icon(Icons.info_outline),
-                  hintText: 'Tell us about yourself...',
+                  hintText: localizations.bioHint,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: AppColors.primary),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Location Details Section
+              _buildSectionHeader(
+                localizations.locationDetails,
+                Icons.location_on_rounded,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _areaController,
+                decoration: InputDecoration(
+                  labelText: localizations.area,
+                  prefixIcon: const Icon(Icons.place_outlined),
+                  hintText: localizations.areaHint,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: AppColors.primary),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _districtController,
+                decoration: InputDecoration(
+                  labelText: localizations.district,
+                  prefixIcon: const Icon(Icons.map_outlined),
+                  hintText: localizations.districtHint,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: AppColors.primary),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _stateController,
+                decoration: InputDecoration(
+                  labelText: localizations.stateLabel,
+                  prefixIcon: const Icon(Icons.flag_outlined),
+                  hintText: localizations.stateHint,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -302,23 +418,23 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.1),
+                  color: _iconChipBg(seed: AppColors.primary),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
                   children: [
                     Icon(
                       Icons.info_outline,
-                      color: AppColors.primary,
+                      color: _iconChipFg(seed: AppColors.primary),
                       size: 20,
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Your profile information will be visible to all users',
+                        localizations.profileVisibilityInfo,
                         style: TextStyle(
                           fontSize: 12,
-                          color: AppColors.textSecondary,
+                          color: Theme.of(context).textTheme.bodySmall?.color,
                         ),
                       ),
                     ),
@@ -329,6 +445,23 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: _iconChipFg(seed: AppColors.primary)),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Theme.of(context).textTheme.bodyLarge?.color,
+          ),
+        ),
+      ],
     );
   }
 }

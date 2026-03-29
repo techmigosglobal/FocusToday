@@ -1,0 +1,480 @@
+  ---
+  Comprehensive Analysis & Improvement Plan
+
+  Part 1: Push Notifications & Message Campaigns
+
+  Current Architecture Overview
+
+  Backend Triggers (Firebase Cloud Functions)
+
+  ┌─────────────────────────────┬──────────────────────────────────────────┬─────────────────────────────┬─────────────────────────────────────────────┐
+  │           Trigger           │                  Event                   │      Notification Type      │                 Recipients                  │
+  ├─────────────────────────────┼──────────────────────────────────────────┼─────────────────────────────┼─────────────────────────────────────────────┤
+  │ onPostStatusChange          │ Post status changes to approved/rejected │ Post approval/rejection     │ Post author (FCM + in-app)
+  | 				|					   |				 | and if approved it should also send one time 
+  |				|					   |				 | push notification to public users           │
+  ├─────────────────────────────┼──────────────────────────────────────────┼─────────────────────────────┼─────────────────────────────────────────────┤
+  │ onBreakingNewsCreated       │ New document in breaking_news collection │ Breaking news broadcast     │ All users should notice breaking_news topic │
+  ├─────────────────────────────┼──────────────────────────────────────────┼─────────────────────────────┼─────────────────────────────────────────────┤
+  │ onEmergencyAlertCreated     │ New document in alerts collection        │ Emergency alert (geofenced) │ Users matching area/district/state          │
+  ├─────────────────────────────┼──────────────────────────────────────────┼─────────────────────────────┼─────────────────────────────────────────────┤
+  │ onReporterApplicationStatus │ Application status changes               │ Reporter application result │ Applicant (FCM + in-app)                    │
+  ├─────────────────────────────┼──────────────────────────────────────────┼─────────────────────────────┼─────────────────────────────────────────────┤
+  │ sendMeetingReminders        │ Scheduled (every 60 min)                 │ Meeting reminder            │ Reporters/Admins (role-based)               │
+  ├─────────────────────────────┼──────────────────────────────────────────┼─────────────────────────────┼─────────────────────────────────────────────┤
+  │ sendMessageCampaign         │ Admin callable function                  │ Campaign message            │ All users, role-based, or topic-based       │
+  └─────────────────────────────┴──────────────────────────────────────────┴─────────────────────────────┴─────────────────────────────────────────────┘
+  │ NormalWakeUpCampaign        │ Auto Triggering function                 │ General Auto message        │ All users, role-based should get enaging    |
+  |				|					   |				 | push notifications on morning and evening   │
+  └─────────────────────────────┴──────────────────────────────────────────┴─────────────────────────────┴─────────────────────────────────────────────┘
+
+  Client-Side (notification_service.dart)
+
+  - FCM token management (obtain, store, sync to Firestore)
+  - Topic subscription (role_{role}, new_content, breaking_news)
+  - Foreground message handling → local notification display
+  - Background/terminated message handling
+  - Quiet hours support
+  - Notification grouping (Android)
+  - Pending navigation handling (deep links)
+
+  Current Issues & Gaps
+
+  1. Missing Notification Triggers
+
+  ┌─────────────────────────────────────────────────────────────────────────────┐
+  │ GAPS IN NOTIFICATION SYSTEM                                                  │
+  ├─────────────────────────────────────────────────────────────────────────────┤
+  │ ❌ New Post Created → No notification to admins for pending content          │
+  │ ❌ Comment on Post → No notification to post author                          │
+  │ ❌ Like/Bookmark → No notification (intentional, but could be optional)      │
+  │ ❌ User Follow → No notification                                              │
+  │ ❌ Post Edited → No notification to admins for re-review                     │
+  │ ❌ Meeting Created → No immediate notification (only 24h reminder)            │
+  │ ❌ Post Resubmitted → No notification to admins                              │
+  │ ❌ User Role Changed → No notification to user                               │
+  │ ❌ Account Disabled → No notification                                         │
+  └─────────────────────────────────────────────────────────────────────────────┘
+
+  2. Message Campaign Limitations
+
+  - No scheduling capability (immediate send only)
+  - No template management
+  - No delivery tracking/analytics
+  - No rich media support (images)
+  - No A/B testing
+  - No retry mechanism for failed deliveries
+  - No user segmentation beyond role/location
+
+  3. Technical Issues
+
+  - FCM tokens stored in user document (single token → device conflicts)
+  - No token cleanup for logged-out users
+  - No deduplication for same user on multiple devices
+  - Missing notification preferences per category
+  - No notification expiry/cleanup
+  - No notification batching for high-volume events
+
+  ---
+  Improvement Plan: Push Notifications
+
+  Phase 1: Add Missing Notification Triggers
+
+  1.1 New Post Created (Admin Notification)
+  Trigger: onDocumentCreated('posts/{postId}') where status == 'pending'
+  Recipients: All admins and super_admins
+  Notification: "New Post Pending Review" with post title
+
+  1.2 Post Comment Created (Author Notification)
+  Trigger: onDocumentCreated('posts/{postId}/comments/{commentId}')
+  Recipients: Post author (if not same as commenter)
+  Notification: "New Comment on Your Post" with commenter name
+
+  1.3 Post Edited & Resubmitted (Admin Notification)
+  Trigger: onDocumentWritten('posts/{postId}') where status == 'pending' and was previously 'rejected'
+  Recipients: All admins
+  Notification: "Post Resubmitted for Review"
+
+  1.4 User Role Changed (User Notification)
+  Trigger: onDocumentWritten('users/{userId}') where role field changed
+  Recipients: The affected user
+  Notification: "Your Role Has Been Updated to {new_role}"
+
+  Phase 2: Token Management Improvements
+
+  2.1 Multi-Device Support
+  - Store tokens in sub-collection: users/{uid}/devices/{deviceId}
+  - Track device metadata (platform, app version, last active)
+  - Support token refresh without duplicates
+
+  2.2 Token Cleanup
+  - Remove stale tokens (> 30 days inactive)
+  - Clean tokens on user logout
+  - Batch cleanup scheduled function
+
+  Phase 3: Notification Preferences System
+
+  3.1 Per-Category Preferences
+  users/{uid}/preferences/notifications:
+  {
+    post_approved: true,
+    post_rejected: true,
+    new_comment: true,
+    breaking_news: true,
+    emergency_alert: true,
+    meeting_reminder: true,
+    marketing: false,
+    quiet_hours: { enabled: true, start: "22:00", end: "07:00" }
+  }
+
+  3.2 Notification Digests
+  - Batch notifications into daily/weekly digest
+  - Group similar notifications ("3 posts approved today")
+  - Reduce notification fatigue
+
+  Phase 4: Rich Notifications & Deep Links
+
+  4.1 Rich Media Support
+  - Add image support for post thumbnails
+  - Use FCM android.notification.image and APNS attachment-url
+  - Video thumbnails for video posts
+
+  4.2 Deep Link Improvements
+  Current: { type: "post_approved", post_id: "xxx" }
+  Improved: {
+    type: "post_approved",
+    post_id: "xxx",
+    deep_link: "eagletv://post/xxx",
+    web_link: "https://eagle-tv-crii.web.app/p/xxx",
+    action_buttons: [
+      { id: "view", title: "View Post" },
+      { id: "share", title: "Share" }
+    ]
+  }
+
+  ---
+  Improvement Plan: Message Campaigns
+
+  Phase 1: Campaign Scheduling
+
+  1.1 Scheduled Campaigns
+  Collection: fcm_campaigns
+  {
+    id: "camp_001",
+    title: "Weekly Digest",
+    body: "Check out the top stories...",
+    status: "scheduled", // draft, scheduled, sending, sent, failed
+    scheduled_at: Timestamp,
+    sent_at: null,
+    created_by: "admin_uid",
+    targeting: { type: "role", value: "reporter" },
+    analytics: { delivered: 0, opened: 0, clicked: 0 }
+  }
+
+  1.2 Campaign Execution Function
+  Scheduled function runs every minute
+  → Queries campaigns where scheduled_at <= now AND status == 'scheduled'
+  → Sends FCM notifications
+  → Updates status and analytics
+
+  Phase 2: Campaign Templates
+
+  2.1 Template System
+  Collection: notification_templates
+  {
+    id: "weekly_digest",
+    title_template: "📰 Weekly Digest - {{week_number}}",
+    body_template: "Top stories: {{top_story_count}} new posts this week!",
+    variables: ["week_number", "top_story_count"],
+    default_targeting: { type: "all" }
+  }
+
+  2.2 Dynamic Variables
+  - Auto-fill variables from system data
+  - Support user-specific variables (name, role)
+  - Date/time formatting
+
+  Phase 3: Campaign Analytics
+
+  3.1 Delivery Tracking
+  Collection: fcm_campaign_deliveries
+  {
+    campaign_id: "camp_001",
+    user_id: "user_uid",
+    device_token: "xxx",
+    status: "delivered", // pending, delivered, failed
+    delivered_at: Timestamp,
+    opened_at: Timestamp,
+    clicked_at: Timestamp
+  }
+
+  3.2 Analytics Dashboard
+  - Delivery rate (% of target reached)
+  - Open rate (% notifications opened)
+  - Click-through rate (deep link clicks)
+  - Unsubscribe rate (topic unsubscriptions)
+
+  Phase 4: Advanced Targeting
+
+  4.1 User Segmentation
+  Targeting Options:
+  - All users
+  - By role: publicUser, reporter, admin, super_admin
+  - By location: state, district, area
+  - By activity: last_active_at > 7 days
+  - By content preference: categories followed
+  - By engagement: posts_liked > 10
+  - Custom segment from Firestore query
+
+  4.2 Smart Segments
+  - "Active users this week" (last_active_at > 7 days ago)
+  - "Contributors" (has created posts)
+  - "New users" (created_at < 7 days ago)
+  - "Inactive users" (last_active_at > 30 days ago)
+
+  ---
+  Part 2: Vertical Flip Animation
+
+  Current Implementation Analysis
+
+  FlipPageView Widget (flip_page_view.dart)
+
+  The current implementation provides a sophisticated page-turn effect with:
+
+  ┌─────────────────────┬──────────────────────────────────────┬─────────────────────────┐
+  │       Feature       │            Implementation            │        Location         │
+  ├─────────────────────┼──────────────────────────────────────┼─────────────────────────┤
+  │ 3D Perspective      │ Matrix4.setEntry(3, 2, 0.0008)       │ Lines 126, 220          │
+  ├─────────────────────┼──────────────────────────────────────┼─────────────────────────┤
+  │ X-Axis Rotation     │ rotateX(progress * π/2)              │ Lines 127, 221          │
+  ├─────────────────────┼──────────────────────────────────────┼─────────────────────────┤
+  │ Scale Depth Effect  │ scaleByDouble(1.0 - progress * 0.03) │ Lines 75-79, 169-173    │
+  ├─────────────────────┼──────────────────────────────────────┼─────────────────────────┤
+  │ Dynamic Shadows     │ Gradient shadows during flip         │ Lines 94-115, 187-209   │
+  ├─────────────────────┼──────────────────────────────────────┼─────────────────────────┤
+  │ Fold Line Effect    │ Center shadow line                   │ Lines 238-267           │
+  ├─────────────────────┼──────────────────────────────────────┼─────────────────────────┤
+  │ Opacity Transitions │ Progressive fade during flip         │ Lines 82, 129, 176, 224 │
+  ├─────────────────────┼──────────────────────────────────────┼─────────────────────────┤
+  │ Card Half Rendering │ OverflowBox with ClipRect            │ Lines 276-298           │
+  └─────────────────────┴──────────────────────────────────────┴─────────────────────────┘
+
+  Gesture Handling (feed_screen.dart)
+
+  ┌────────────────────────┬───────────────────────────────────────────┬───────────────┐
+  │        Feature         │              Implementation               │   Location    │
+  ├────────────────────────┼───────────────────────────────────────────┼───────────────┤
+  │ Drag Start             │ _handleDragStart()                        │ Lines 288-290 │
+  ├────────────────────────┼───────────────────────────────────────────┼───────────────┤
+  │ Drag Update            │ Progressive _dragProgress                 │ Lines 292-307 │
+  ├────────────────────────┼───────────────────────────────────────────┼───────────────┤
+  │ Drag End with Velocity │ Threshold: 0.3 progress OR velocity > 1.0 │ Lines 309-349 │
+  ├────────────────────────┼───────────────────────────────────────────┼───────────────┤
+  │ Animation Completion   │ 250ms easeOutCubic                        │ Lines 318-319 │
+  ├────────────────────────┼───────────────────────────────────────────┼───────────────┤
+  │ Bounds Checking        │ First/last post limits                    │ Lines 299-305 │
+  └────────────────────────┴───────────────────────────────────────────┴───────────────┘
+
+  Current Issues
+
+  1. Missing Features from Requirements
+
+  ┌─────────────────────────────────────────────────────────────────────────────┐
+  │ MISSING FEATURES FROM REQUIREMENTS                                           │
+  ├─────────────────────────────────────────────────────────────────────────────┤
+  │ ❌ Parallax scrolling - Different layers move at different speeds            │
+  │ ❌ Peek preview - Slow drag allows "peeking" at next story                   │
+  │ ❌ Speed matching - Animation speed doesn't match swipe velocity             │
+  │ ❌ Layer depth - No separate layers for headline, image, text               │
+  │ ❌ Spring physics - No elastic snap-back feel                               │
+  │ ❌ Haptic feedback intensity - Current haptics don't match gesture force    │
+  │ ❌ Gesture velocity influence on flip duration                               │
+  └─────────────────────────────────────────────────────────────────────────────┘
+
+  2. Performance Considerations
+
+  - Card rebuilt on every frame during drag (no RepaintBoundary isolation)
+  - Full card rendered even when only half visible
+  - Video preloading could be optimized
+
+  ---
+  Improvement Plan: Vertical Flip Animation
+
+  Phase 1: Parallax Layer Effect
+
+  1.1 Add Layered Content Rendering
+
+  Instead of rendering the entire card as one piece, split into parallax layers:
+
+  Layer Structure:
+  ├── Background Layer (image/video) - moves faster
+  ├── Media Layer (thumbnail) - moves at medium speed
+  ├── Content Layer (headline, text) - moves slower
+  └── Overlay Layer (gradients, badges) - static relative to card
+
+  1.2 Implementation Approach
+  // Each layer has different parallax factor during flip
+  class ParallaxLayer {
+    final double parallaxFactor; // 0.5 = slow, 1.5 = fast
+    final Widget child;
+  }
+
+  // During flip animation:
+  // Background image translates Y by: progress * cardHeight * 0.3
+  // Text layer translates Y by: progress * cardHeight * 0.15
+  // This creates depth perception
+
+  Phase 2: Peek Preview Enhancement
+
+  2.1 Progressive Peek During Slow Drag
+
+  When user drags slowly (velocity < threshold):
+  - Show a "sneak peek" of the next/previous card's headline
+  - Overlay with semi-transparent preview
+  - Allow user to "preview" before committing
+
+  2.2 Implementation
+  // In _handleDragUpdate:
+  if (dragVelocity.abs() < PEEK_VELOCITY_THRESHOLD &&
+      dragProgress.abs() > PEEK_MIN_PROGRESS &&
+      dragProgress.abs() < PEEK_MAX_PROGRESS) {
+    showPeekPreview = true;
+    peekContent = nextPost?.headline; // Show headline preview
+  }
+
+  Phase 3: Velocity-Based Animation
+
+  3.1 Match Animation Speed to Swipe Velocity
+
+  Currently fixed at 250ms. Should vary based on gesture:
+
+  Slow swipe (low velocity): 400-500ms animation
+  Medium swipe: 250-300ms animation
+  Fast flick (high velocity): 100-150ms animation
+
+  3.2 Implementation
+  // Calculate animation duration from velocity
+  double velocity = details.primaryVelocity ?? 0;
+  double normalizedVelocity = (velocity.abs() / screenHeight).clamp(0.0, 1.0);
+  Duration animationDuration = Duration(
+    milliseconds: 400 - (normalizedVelocity * 300).toInt()
+  ); // 400ms at slow, 100ms at fast
+
+  Phase 4: Spring Physics
+
+  4.1 Add Elastic Snap-Back
+
+  When user releases below threshold, the card should snap back with a spring animation:
+  // Use Curves.elasticOut or custom spring curve
+  _flipController.animateTo(
+    0.0,
+    duration: const Duration(milliseconds: 400),
+    curve: Curves.elasticOut, // Bouncy return
+  );
+
+  4.2 Over-Drag Effect
+  - Allow dragging past the flip point (dragProgress > 1.0)
+  - Apply resistance as user drags past the threshold
+  - Spring back when released
+
+  Phase 5: Haptic Feedback Enhancement
+
+  5.1 Intensity-Based Haptics
+  // Match haptic intensity to gesture velocity
+  if (velocity.abs() > FAST_VELOCITY) {
+    HapticFeedback.heavyImpact();
+  } else if (velocity.abs() > MEDIUM_VELOCITY) {
+    HapticFeedback.mediumImpact();
+  } else {
+    HapticFeedback.lightImpact();
+  }
+
+  // Add "flip point" haptic when passing 50% progress
+  if (previousProgress < 0.5 && currentProgress >= 0.5) {
+    HapticFeedback.selectionClick(); // Tactile confirmation
+  }
+
+  Phase 6: Performance Optimizations
+
+  6.1 RepaintBoundary Isolation
+  // Wrap each layer in RepaintBoundary
+  RepaintBoundary(
+    child: ParallaxLayer(
+      parallaxFactor: 0.8,
+      child: MediaLayer(post: post),
+    ),
+  )
+
+  6.2 Lazy Card Building
+  - Only build next/previous card when needed
+  - Cache built widgets during animation
+  - Dispose cards that are far from current index
+
+  6.3 Video Preloading Enhancement
+  // Preload video for next post when user starts dragging
+  void _handleDragStart(DragStartDetails details) {
+    _flipController.stop();
+    // Preload next video if likely to flip
+    if (_videoController == null && nextPost?.contentType == 'video') {
+      _preloadVideo(nextPost!.mediaUrl);
+    }
+  }
+
+  ---
+  Implementation Priority
+
+  High Priority (Phase 1-2)
+
+  1. ✅ Add missing notification triggers (New Post Pending, Comment)
+  2. ✅ Implement velocity-based animation timing
+  3. ✅ Add parallax layer effect
+
+  Medium Priority (Phase 3-4)
+
+  4. ✅ Campaign scheduling system
+  5. ✅ Multi-device token management
+  6. ✅ Spring physics for snap-back
+  7. ✅ Peek preview feature
+
+  Low Priority (Phase 5-6)
+
+  8. ✅ Campaign templates and analytics
+  9. ✅ Rich notification media
+  10. ✅ Advanced user segmentation
+
+  ---
+  Architecture Diagram
+
+  ┌─────────────────────────────────────────────────────────────────────────────┐
+  │                    NOTIFICATION SYSTEM ARCHITECTURE                          │
+  └─────────────────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+  │   App Action    │───▶│  Firestore      │───▶│ Cloud Function  │
+  │  (Post created) │    │  (posts/...)     │    │  (onTrigger)     │
+  └─────────────────┘    └─────────────────┘    └────────┬────────┘
+                                                         │
+  ┌─────────────────┐    ┌─────────────────┐    ┌───────▼────────┐
+  │   Client App    │◀───│   FCM Topic/    │◀───│ Notification   │
+  │ (NotificationService)│   Token Delivery │    │ Builder        │
+  └─────────────────┘    └─────────────────┘    └────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────────────┐
+  │                    FLIP ANIMATION ARCHITECTURE                                │
+  └─────────────────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+  │  GestureDetector│───▶│  FlipController │───▶│  FlipPageView   │
+  │  (onVerticalDrag)│    │  (Animation)    │    │  (3D Transform) │
+  └─────────────────┘    └─────────────────┘    └────────┬────────┘
+          │                                              │
+          │ velocity                                     │ layers
+          ▼                                              ▼
+  ┌─────────────────┐    ┌─────────────────────────────────────────────────────┐
+  │ VelocityAnalyzer│───▶│ Parallax Layers:                                     │
+  │ - Duration      │    │ [Background] → [Media] → [Content] → [Overlay]      │
+  │ - Curve         │    │ (0.3 parallax)  (0.5)    (0.15)       (static)     │
+  │ - Haptic        │    └─────────────────────────────────────────────────────┘
+  └─────────────────┘
+
+  This comprehensive analysis covers the current state and provides a detailed roadmap for improvements to both the notification system and the vertical flip animation. Implement one by one first go with verticle flip animation and then message campaigns.

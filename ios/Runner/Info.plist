@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>EagleTV</string>
+	<string>CRII</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -13,7 +13,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>eagle_tv</string>
+	<string>CRII</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -45,5 +45,23 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<!-- Camera & Photo permissions (image_picker, image_cropper) -->
+	<key>NSCameraUsageDescription</key>
+	<string>CRII needs camera access to capture photos and videos for posts</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>CRII needs photo library access to select media for posts</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>CRII needs permission to save photos to your library</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>CRII needs microphone access to record videos for posts</string>
+	<!-- Biometric auth (flutter_secure_storage) -->
+	<key>NSFaceIDUsageDescription</key>
+	<string>CRII uses Face ID to secure your account</string>
+	<!-- Push notifications (firebase_messaging) -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+		<string>fetch</string>
+	</array>
 </dict>
 </plist>

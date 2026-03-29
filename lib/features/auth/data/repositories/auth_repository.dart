@@ -1,260 +1,368 @@
-import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
-import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fa;
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:uuid/uuid.dart';
-import 'package:sqflite/sqflite.dart';
+
+import '../../../../core/services/cache_service.dart';
+import '../../../../core/services/firestore_service.dart';
+import '../../../../core/services/notification_service.dart';
+import '../../../../core/services/post_sync_service.dart';
+import '../../../../core/services/secure_storage_service.dart';
+import '../../../../core/services/user_sync_service.dart';
+import '../../../../core/utils/phone_number_utils.dart';
+import '../../../feed/data/repositories/post_repository.dart';
 import '../../../../shared/models/user.dart';
-import '../../../../core/services/database_service.dart';
-import '../../../../core/services/subscription_service.dart';
-import '../../domain/constants/auth_constants.dart';
 
-/// Authentication Repository
-/// Manages user sessions and authentication state using Firebase and Supabase
 class AuthRepository {
-  static const String _keySessionToken = 'session_token';
-  static const String _keyUserId = 'user_id';
-  static const String _keyPhoneNumber = 'phone_number';
-  static const String _keyDisplayName = 'display_name';
-  static const String _keyRole = 'user_role';
-  static const String _keyIsSubscribed = 'is_subscribed';
-  static const String _keyPreferredLanguage = 'preferred_language';
-
   final SharedPreferences _prefs;
-  final DatabaseService _db = DatabaseService.instance;
-  final firebase_auth.FirebaseAuth _auth = firebase_auth.FirebaseAuth.instance;
-  final supabase.SupabaseClient _supabase = supabase.Supabase.instance.client;
 
-  AuthRepository(this._prefs);
+  AuthRepository._(this._prefs);
 
-  /// Initialize AuthRepository
+  static AuthRepository? _instance;
+
   static Future<AuthRepository> init() async {
+    if (_instance != null) return _instance!;
     final prefs = await SharedPreferences.getInstance();
-    return AuthRepository(prefs);
+    _instance = AuthRepository._(prefs);
+    return _instance!;
   }
 
-  /// Check if user is logged in
-  bool isLoggedIn() {
-    return _auth.currentUser != null ||
-        (_prefs.containsKey(_keySessionToken) &&
-            _prefs.containsKey(_keyUserId));
-  }
+  Future<User?> restoreSession() async {
+    final userId = _prefs.getString('user_id');
+    if (userId == null) return null;
 
-  /// Send OTP to phone number
-  Future<void> signInWithPhoneNumber({
-    required String phoneNumber,
-    required Function(String verificationId) onCodeSent,
-    required Function(firebase_auth.FirebaseAuthException e)
-    onVerificationFailed,
-  }) async {
-    // Add +91 prefix if not present
-    String formattedPhone = phoneNumber;
-    if (!phoneNumber.startsWith('+')) {
-      formattedPhone = '+91$phoneNumber';
+    final firebaseUser = _safeCurrentUser();
+    if (firebaseUser == null || firebaseUser.uid != userId) {
+      await clearSession();
+      return null;
     }
 
-    await _auth.verifyPhoneNumber(
-      phoneNumber: formattedPhone,
-      verificationCompleted:
-          (firebase_auth.PhoneAuthCredential credential) async {
-            await _auth.signInWithCredential(credential);
-          },
-      verificationFailed: onVerificationFailed,
-      codeSent: (String verificationId, int? resendToken) {
-        onCodeSent(verificationId);
-      },
-      codeAutoRetrievalTimeout: (String verificationId) {},
-    );
-  }
-
-  /// Verify OTP and sign in
-  Future<firebase_auth.UserCredential> verifyOTP({
-    required String verificationId,
-    required String smsCode,
-  }) async {
-    firebase_auth.PhoneAuthCredential credential =
-        firebase_auth.PhoneAuthProvider.credential(
-          verificationId: verificationId,
-          smsCode: smsCode,
-        );
-
-    return await _auth.signInWithCredential(credential);
-  }
-
-  /// Save user session and local profile
-  Future<void> saveSession({
-    required String phoneNumber,
-    required String displayName,
-    required UserRole role,
-    bool isSubscribed = false,
-    String preferredLanguage = 'en',
-    String? firebaseUserId,
-  }) async {
-    const uuid = Uuid();
-    final sessionToken = uuid.v4();
-    final userId = firebaseUserId ?? uuid.v4();
-
-    // 1. Save to SharedPreferences
-    await _prefs.setString(_keySessionToken, sessionToken);
-    await _prefs.setString(_keyUserId, userId);
-    await _prefs.setString(_keyPhoneNumber, phoneNumber);
-    await _prefs.setString(_keyDisplayName, displayName);
-    await _prefs.setString(_keyRole, role.toStr());
-    await _prefs.setBool(_keyIsSubscribed, isSubscribed);
-    await _prefs.setString(_keyPreferredLanguage, preferredLanguage);
-
-    final user = User(
-      id: userId,
-      phoneNumber: phoneNumber,
-      displayName: displayName,
-      role: role,
-      isSubscribed: isSubscribed,
-      createdAt: DateTime.now(),
-      preferredLanguage: preferredLanguage,
-    );
-
-    // 2. Save to Supabase
     try {
-      await _supabase.from('users').upsert(user.toMap());
-    } catch (_) {}
-
-    // 3. Save to local database
-    final db = await _db.database;
-    await db.insert(
-      'users',
-      user.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
-  }
-
-  /// Restore session and get current user
-  Future<User?> restoreSession() async {
-    final firebaseUser = _auth.currentUser;
-
-    try {
-      String? userId;
-      if (firebaseUser != null) {
-        userId = firebaseUser.uid;
-      } else {
-        userId = _prefs.getString(_keyUserId);
+      final doc = await FirestoreService.users.doc(userId).get();
+      if (doc.exists && doc.data() != null) {
+        final remoteUser = User.fromMap({'id': doc.id, ...doc.data()!});
+        await _persistLocalSession(remoteUser);
+        unawaited(_warmFeedCache(remoteUser.id));
+        return remoteUser;
       }
+    } catch (e) {
+      debugPrint('[AuthRepo] restoreSession remote read failed: $e');
+    }
 
-      if (userId == null) return null;
+    final localUser = _restoreLocalUser();
+    if (localUser != null) {
+      unawaited(_warmFeedCache(localUser.id));
+    }
+    return localUser;
+  }
 
-      // Try to get from Supabase first
+  Future<void> clearSession() async {
+    final userId = _prefs.getString('user_id');
+    if (userId != null && userId.trim().isNotEmpty) {
       try {
-        final data = await _supabase
-            .from('users')
-            .select()
-            .eq('id', userId)
-            .single();
-        final user = User.fromMap(data);
-        // Sync to local
-        final db = await _db.database;
-        await db.insert(
-          'users',
-          user.toMap(),
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
-        return user;
-      } catch (_) {}
+        await NotificationService.instance.deleteToken(userId: userId);
+      } catch (e) {
+        debugPrint('[AuthRepo] token cleanup during logout failed: $e');
+      }
+    }
 
-      // Fallback to local database
-      final db = await _db.database;
-      final results = await db.query(
-        'users',
-        where: 'id = ?',
-        whereArgs: [userId],
-        limit: 1,
+    await _prefs.remove('user_id');
+    await _prefs.remove('phone_number');
+    await _prefs.remove('display_name');
+    await _prefs.remove('role');
+    await _prefs.remove('profile_picture');
+    await _prefs.remove('created_at');
+    await _prefs.remove('bio');
+    await _prefs.remove('area');
+    await _prefs.remove('district');
+    await _prefs.remove('state');
+    await _prefs.remove('email');
+    try {
+      await fa.FirebaseAuth.instance.signOut();
+    } catch (_) {}
+    await SecureStorageService.clearAll();
+  }
+
+  bool isLoggedIn() => _prefs.getString('user_id') != null;
+
+  /// Verifies the Msg91 access token via Cloud Function and creates a Firebase session.
+  ///
+  /// Returns a [AuthResult] with success/failure and error details.
+  Future<AuthResult> verifyAndSaveSession({
+    required String phoneNumber,
+    String? accessToken,
+  }) async {
+    final totalWatch = Stopwatch()..start();
+    final normalizedPhone = PhoneNumberUtils.normalizeIndianPhone(phoneNumber);
+    final verifiedAccessToken = accessToken?.trim() ?? '';
+    if (!PhoneNumberUtils.isValidIndianPhone(normalizedPhone) ||
+        verifiedAccessToken.isEmpty) {
+      return AuthResult.failure(
+        'Invalid phone number or missing access token.',
+      );
+    }
+
+    try {
+      debugPrint(
+        '[AuthRepo] Calling verifyMsg91OtpAndExchangeToken (asia-south1)',
       );
 
-      if (results.isNotEmpty) {
-        return User.fromMap(results.first);
-      }
+      // Cloud Functions are deployed to asia-south1 region.
+      final response =
+          await FirebaseFunctions.instanceFor(region: 'asia-south1')
+              .httpsCallable(
+                'verifyMsg91OtpAndExchangeToken',
+                options: HttpsCallableOptions(
+                  timeout: const Duration(seconds: 30),
+                ),
+              )
+              .call({
+                'phone_number': normalizedPhone,
+                'access_token': verifiedAccessToken,
+              });
 
-      // If not in database but we have firebase user, create a profile
-      if (firebaseUser != null) {
-        final phoneNumber = firebaseUser.phoneNumber ?? '';
-        final role = assignRoleByPhoneNumber(phoneNumber);
-        final displayName =
-            'User ${phoneNumber.length > 4 ? phoneNumber.substring(phoneNumber.length - 4) : "New"}';
-
-        final user = User(
-          id: userId,
-          phoneNumber: phoneNumber,
-          displayName: displayName,
-          role: role,
-          createdAt: DateTime.now(),
+      final data = Map<String, dynamic>.from(
+        (response.data as Map?) ?? const <String, dynamic>{},
+      );
+      final serverDebug = data['debug'] is Map
+          ? Map<String, dynamic>.from(data['debug'] as Map)
+          : null;
+      final customToken = (data['custom_token'] ?? '').toString().trim();
+      if (customToken.isEmpty) {
+        debugPrint('[AuthRepo] Missing Firebase custom token in auth response');
+        return AuthResult.failure(
+          'Authentication incomplete: No session token received. Please try again.',
         );
-
-        // Save to Supabase and Local
-        try {
-          await _supabase.from('users').upsert(user.toMap());
-        } catch (_) {}
-        await db.insert('users', user.toMap());
-        return user;
       }
 
-      return null;
+      final rawUser = Map<String, dynamic>.from(
+        (data['user'] as Map?) ?? const <String, dynamic>{},
+      );
+      final targetUid = (rawUser['id'] ?? rawUser['uid'] ?? '').toString();
+      final current = _safeCurrentUser();
+      if (current != null && targetUid.isNotEmpty && current.uid != targetUid) {
+        await fa.FirebaseAuth.instance.signOut();
+      }
+
+      final credential = await fa.FirebaseAuth.instance.signInWithCustomToken(
+        customToken,
+      );
+      final signedInUid = credential.user?.uid.isNotEmpty == true
+          ? credential.user!.uid
+          : targetUid;
+      if (signedInUid.isEmpty) {
+        debugPrint('[AuthRepo] Firebase sign-in succeeded without a uid');
+        return AuthResult.failure('Sign-in failed: User ID missing.');
+      }
+
+      final userMap = <String, dynamic>{
+        'id': signedInUid,
+        'phone_number': rawUser['phone_number'] ?? normalizedPhone,
+        'display_name': rawUser['display_name'] ?? 'User',
+        'role': rawUser['role'] ?? 'public_user',
+        'email': rawUser['email'],
+        'profile_picture': rawUser['profile_picture'],
+        'bio': rawUser['bio'],
+        'area': rawUser['area'],
+        'district': rawUser['district'],
+        'state': rawUser['state'],
+        'created_at': rawUser['created_at'] ?? DateTime.now().toIso8601String(),
+      };
+      final user = User.fromMap(userMap);
+      await _persistLocalSession(user);
+      await SecureStorageService.saveUserId(signedInUid);
+      unawaited(_warmFeedCache(signedInUid));
+      totalWatch.stop();
+      debugPrint(
+        '[AuthRepo][Perf] verifyAndSaveSession totalMs=${totalWatch.elapsedMilliseconds} '
+        'serverDebug=${serverDebug ?? const <String, dynamic>{}}',
+      );
+      return AuthResult.success(user: user, diagnostics: serverDebug);
+    } on FirebaseFunctionsException catch (e) {
+      debugPrint(
+        '[AuthRepo] FirebaseFunctionsException: ${e.code} — ${e.message}',
+      );
+      final msg = switch (e.code) {
+        'unauthenticated' =>
+          'OTP verification failed. The code may have expired — please request a new one.',
+        'invalid-argument' => 'Invalid data sent to server. Please try again.',
+        'permission-denied' =>
+          'Your account has been disabled. Contact support.',
+        'not-found' =>
+          'Authentication service not found. Please update the app.',
+        'unavailable' =>
+          'Service temporarily unavailable. Please try again in a moment.',
+        'deadline-exceeded' =>
+          'Request timed out. Check your internet connection and try again.',
+        _ => 'Verification failed (${e.code}). Please try again.',
+      };
+      return AuthResult.failure(msg);
+    } catch (e) {
+      debugPrint('[AuthRepo] verifyAndSaveSession error: $e');
+      final errStr = e.toString();
+      if (errStr.contains('network') ||
+          errStr.contains('timeout') ||
+          errStr.contains('connection')) {
+        return AuthResult.failure(
+          'Network error. Please check your internet connection.',
+        );
+      }
+      return AuthResult.failure('Verification failed. Please try again.');
+    }
+  }
+
+  Future<void> logout() async {
+    await clearSession();
+  }
+
+  Future<void> updateProfile({
+    String? displayName,
+    String? bio,
+    String? profilePicture,
+    String? area,
+    String? district,
+    String? state,
+    bool syncRemote = true,
+    bool notifyUserSync = true,
+  }) async {
+    final userId = _prefs.getString('user_id');
+    if (displayName != null) {
+      await _prefs.setString('display_name', displayName);
+    }
+    if (bio != null) await _prefs.setString('bio', bio);
+    if (profilePicture != null) {
+      await _prefs.setString('profile_picture', profilePicture);
+    }
+    if (area != null) await _prefs.setString('area', area);
+    if (district != null) await _prefs.setString('district', district);
+    if (state != null) await _prefs.setString('state', state);
+
+    if (userId != null && syncRemote) {
+      final data = <String, dynamic>{
+        'updated_at': FieldValue.serverTimestamp(),
+      };
+      if (displayName != null) data['display_name'] = displayName;
+      if (bio != null) data['bio'] = bio;
+      if (profilePicture != null) data['profile_picture'] = profilePicture;
+      if (area != null) data['area'] = area;
+      if (district != null) data['district'] = district;
+      if (state != null) data['state'] = state;
+
+      await FirestoreService.users
+          .doc(userId)
+          .set(data, SetOptions(merge: true));
+    }
+
+    if (userId != null) {
+      await CacheService.invalidate('profile_user_$userId');
+      await CacheService.invalidate('profile_stats_$userId');
+      if (notifyUserSync) {
+        UserSyncService.notify(reason: UserSyncReason.updated, userId: userId);
+      }
+      PostSyncService.notify(reason: PostSyncReason.updated, authorId: userId);
+    }
+  }
+
+  Future<void> _persistLocalSession(User user) async {
+    await _prefs.setString('user_id', user.id);
+    await _prefs.setString('phone_number', user.phoneNumber);
+    await _prefs.setString('display_name', user.displayName);
+    await _prefs.setString('role', user.role.toStr());
+    if (user.profilePicture != null) {
+      await _prefs.setString('profile_picture', user.profilePicture!);
+    } else {
+      await _prefs.remove('profile_picture');
+    }
+    if (user.email != null) {
+      await _prefs.setString('email', user.email!);
+    } else {
+      await _prefs.remove('email');
+    }
+    if (user.bio != null) {
+      await _prefs.setString('bio', user.bio!);
+    } else {
+      await _prefs.remove('bio');
+    }
+    if (user.area != null) {
+      await _prefs.setString('area', user.area!);
+    } else {
+      await _prefs.remove('area');
+    }
+    if (user.district != null) {
+      await _prefs.setString('district', user.district!);
+    } else {
+      await _prefs.remove('district');
+    }
+    if (user.state != null) {
+      await _prefs.setString('state', user.state!);
+    } else {
+      await _prefs.remove('state');
+    }
+    await _prefs.setString('created_at', user.createdAt.toIso8601String());
+  }
+
+  User? _restoreLocalUser() {
+    final userId = _prefs.getString('user_id');
+    if (userId == null) return null;
+
+    final role = UserRoleExtension.fromString(_prefs.getString('role'));
+    return User(
+      id: userId,
+      phoneNumber: _prefs.getString('phone_number') ?? '',
+      email: _prefs.getString('email'),
+      displayName: _prefs.getString('display_name') ?? 'User',
+      role: role,
+      profilePicture: _prefs.getString('profile_picture'),
+      bio: _prefs.getString('bio'),
+      area: _prefs.getString('area'),
+      district: _prefs.getString('district'),
+      state: _prefs.getString('state'),
+      createdAt:
+          DateTime.tryParse(_prefs.getString('created_at') ?? '') ??
+          DateTime.now(),
+    );
+  }
+
+  fa.User? _safeCurrentUser() {
+    try {
+      return fa.FirebaseAuth.instance.currentUser;
     } catch (_) {
       return null;
     }
   }
 
-  /// Logout
-  Future<void> logout() async {
-    await _auth.signOut();
-
+  Future<void> _warmFeedCache(String userId) async {
+    if (userId.isEmpty) return;
     try {
-      final subscriptionService = await SubscriptionService.init();
-      await subscriptionService.clearSubscription();
-    } catch (_) {}
-
-    // Clear local session
-    await _prefs.clear(); // Simpler than remove each if we want full logout
-  }
-
-  /// Get current user ID
-  String? getCurrentUserId() =>
-      _auth.currentUser?.uid ?? _prefs.getString(_keyUserId);
-
-  /// Update user profile
-  Future<void> updateProfile({
-    String? displayName,
-    String? bio,
-    String? profilePicture,
-    String? preferredLanguage,
-  }) async {
-    final userId = getCurrentUserId();
-    if (userId == null) return;
-
-    final db = await _db.database;
-    final Map<String, dynamic> updates = {};
-    if (displayName != null) updates['display_name'] = displayName;
-    if (bio != null) updates['bio'] = bio;
-    if (profilePicture != null) updates['profile_picture'] = profilePicture;
-    if (preferredLanguage != null)
-      updates['preferred_language'] = preferredLanguage;
-
-    if (updates.isNotEmpty) {
-      // 1. Update Supabase
-      try {
-        await _supabase.from('users').update(updates).eq('id', userId);
-      } catch (_) {}
-
-      // 2. Update Local
-      await db.update('users', updates, where: 'id = ?', whereArgs: [userId]);
-
-      // 3. Update Prefs if needed
-      if (displayName != null)
-        await _prefs.setString(_keyDisplayName, displayName);
-      if (preferredLanguage != null)
-        await _prefs.setString(_keyPreferredLanguage, preferredLanguage);
+      await PostRepository().getApprovedPostsWithInteractions(
+        userId,
+        forceRefresh: false,
+      );
+    } catch (_) {
+      // Best effort background warmup.
     }
   }
+}
 
-  /// Assign role based on phone number
-  static UserRole assignRoleByPhoneNumber(String phoneNumber) {
-    final roleStr = AuthConstants.getRoleForPhoneNumber(phoneNumber);
-    return UserRoleExtension.fromString(roleStr);
-  }
+/// Result of an authentication attempt.
+class AuthResult {
+  final bool isSuccess;
+  final String? errorMessage;
+  final User? user;
+  final Map<String, dynamic>? diagnostics;
+
+  const AuthResult._({
+    required this.isSuccess,
+    this.errorMessage,
+    this.user,
+    this.diagnostics,
+  });
+
+  factory AuthResult.success({User? user, Map<String, dynamic>? diagnostics}) =>
+      AuthResult._(isSuccess: true, user: user, diagnostics: diagnostics);
+  factory AuthResult.failure(String message) =>
+      AuthResult._(isSuccess: false, errorMessage: message);
 }

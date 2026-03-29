@@ -1,8 +1,8 @@
-name: eagle_tv
-description: "EagleTV - Premium Offline-First Social Media Application"
+name: focus_today
+description: "Focus Today - Premium Offline-First Social Media Application"
 publish_to: 'none'
 
-version: 2.0.0+1
+version: 1.0.3+4
 
 environment:
   sdk: ^3.10.3
@@ -16,26 +16,32 @@ dependencies:
   cached_network_image: ^3.3.0      # Image caching
   shimmer: ^3.0.0                   # Skeleton loaders
   cupertino_icons: ^1.0.8
+  flutter_animate: ^4.5.2           # Smooth micro-interactions & animations
   
-  # State Management
-  provider: ^6.1.1
+  # State Management — Riverpod (replaces provider)
+  flutter_riverpod: ^2.6.1          # Reactive state management with DI
   
   # Local Storage
   sqflite: ^2.3.0                   # SQL database
   path: ^1.8.0                      # Path manipulation
   path_provider: ^2.1.1             # File paths
   shared_preferences: ^2.2.2        # Simple key-value storage
+  flutter_secure_storage: ^9.2.4    # Secure token/credential storage
   
   # Media Handling
   image_picker: ^1.0.5              # Gallery/camera access
-  video_player: ^2.8.1              # Video playback
-  image_cropper: ^8.0.3             # Image editing
-  file_picker: ^8.0.0               # File selection (PDF, etc.)
-  syncfusion_flutter_pdfviewer: ^31.2.18  # PDF rendering
+  video_player: ^2.9.1              # Video playback (video_player_android updated separately)
+  video_thumbnail: ^0.5.6           # Static thumbnails for feed video cards
+  image_cropper: ^11.0.0            # Image editing
+  file_picker: ^10.3.8              # File selection (PDF, etc.)
+  syncfusion_flutter_pdfviewer: ^32.1.19  # PDF rendering
   
-  # Networking (future backend)
+  # Networking
   dio: ^5.4.0                       # HTTP client
-  connectivity_plus: ^5.0.2         # Network status
+  connectivity_plus: ^7.0.0         # Network status & offline detection
+  
+  # Value Equality
+  equatable: ^2.0.7                 # Value equality for models
   
   # Internationalization
   flutter_localizations:
@@ -44,26 +50,41 @@ dependencies:
   
   # Utilities
   uuid: ^4.3.3                      # Unique IDs
-  share_plus: ^7.2.1                # Native sharing
+  share_plus: ^12.0.1               # Native sharing
   url_launcher: ^6.2.2              # Open URLs
-  permission_handler: ^11.3.1
-  flutter_dotenv: ^5.1.0            # Environment variables
+  permission_handler: ^12.0.1
+  flutter_dotenv: ^6.0.0            # Environment variables
+  device_info_plus: ^12.3.0         # Device information
+  package_info_plus: ^8.3.0         # App package information
   
   # Notifications & Translation
   flutter_local_notifications: ^19.2.0
-  google_mlkit_translation: ^0.12.0
+  google_mlkit_translation: ^0.13.1
 
-  supabase_flutter: ^2.8.1
+  # Firebase Integration (Using Firebase BoM for consistent versions)
+  firebase_core: ^4.3.0
+  firebase_auth: ^6.1.3
+  firebase_crashlytics: ^5.0.6
+  firebase_messaging: ^16.1.0
+  cloud_firestore: ^6.0.3
+  firebase_storage: ^13.0.3
+  cloud_functions: ^6.0.3
+  sendotp_flutter_sdk: ^0.0.2
+  sms_autofill: ^2.4.1
+  qr_flutter: ^4.1.0
+  fl_chart: ^1.1.1
+  printing: ^5.14.2
+  flutter_quill: ^11.5.0
 
-  # Firebase Integration (Keeping Core/Auth for now if needed, but switching DB/Storage)
-  firebase_core: ^3.0.0
-  firebase_auth: ^5.0.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.3
+  sqflite_common_ffi: ^2.3.0  # For testing SQLite
+  mockito: ^5.4.4  # For mocking dependencies
+  build_runner: ^2.4.8  # For code generation
 
 flutter:
   uses-material-design: true
@@ -71,6 +92,8 @@ flutter:
   # Assets
   assets:
     - assets/images/
-    - .env
+    - Focus_Today_icon.png
+    - Focus_Today_icon.jpeg
+    - .env  # Optional - will be ignored if not present
   
   generate: true  # Enable i18n code generation

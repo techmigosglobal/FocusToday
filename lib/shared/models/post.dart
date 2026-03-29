@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 /// Content Type for posts
 enum ContentType { image, video, pdf, article, story, poetry, none }
 
@@ -97,6 +99,7 @@ class Post {
   final String caption;
   final String? captionTe; // Telugu translation
   final String? captionHi; // Hindi translation
+  final List<dynamic>? captionDelta; // Rich text delta for caption
   final String? mediaUrl;
   final ContentType contentType;
   final String category;
@@ -108,7 +111,12 @@ class Post {
   // Content-specific fields
   final String? pdfFilePath; // For PDF content
   final String? articleContent; // For article/story content
+  final List<dynamic>? articleContentDelta; // Rich text delta for body content
   final List<String>? poemVerses; // For poetry content (list of stanzas/verses)
+  final String? articleContentTe; // Telugu article/story translation
+  final String? articleContentHi; // Hindi article/story translation
+  final List<String>? poemVersesTe; // Telugu poetry translation
+  final List<String>? poemVersesHi; // Hindi poetry translation
 
   // Engagement metrics
   final int likesCount;
@@ -135,6 +143,7 @@ class Post {
     required this.caption,
     this.captionTe,
     this.captionHi,
+    this.captionDelta,
     this.mediaUrl,
     this.contentType = ContentType.none,
     required this.category,
@@ -144,7 +153,12 @@ class Post {
     required this.publishedAt,
     this.pdfFilePath,
     this.articleContent,
+    this.articleContentDelta,
     this.poemVerses,
+    this.articleContentTe,
+    this.articleContentHi,
+    this.poemVersesTe,
+    this.poemVersesHi,
     this.likesCount = 0,
     this.bookmarksCount = 0,
     this.sharesCount = 0,
@@ -178,6 +192,7 @@ class Post {
       'caption': caption,
       'caption_te': captionTe,
       'caption_hi': captionHi,
+      'caption_delta': captionDelta,
       'media_url': mediaUrl,
       'content_type': contentType.toStr(),
       'category': category,
@@ -187,7 +202,12 @@ class Post {
       'published_at': publishedAt.millisecondsSinceEpoch,
       'pdf_file_path': pdfFilePath,
       'article_content': articleContent,
+      'article_content_delta': articleContentDelta,
       'poem_verses': poemVerses?.join('||| VERSE_SEPARATOR |||'),
+      'article_content_te': articleContentTe,
+      'article_content_hi': articleContentHi,
+      'poem_verses_te': poemVersesTe?.join('||| VERSE_SEPARATOR |||'),
+      'poem_verses_hi': poemVersesHi?.join('||| VERSE_SEPARATOR |||'),
       'likes_count': likesCount,
       'bookmarks_count': bookmarksCount,
       'shares_count': sharesCount,
@@ -208,6 +228,7 @@ class Post {
       caption: map['caption'],
       captionTe: map['caption_te'],
       captionHi: map['caption_hi'],
+      captionDelta: parseDeltaValue(map['caption_delta']),
       mediaUrl: map['media_url'],
       contentType: ContentTypeExtension.fromString(
         map['content_type'] ?? map['media_type'],
@@ -221,9 +242,22 @@ class Post {
       publishedAt: DateTime.fromMillisecondsSinceEpoch(map['published_at']),
       pdfFilePath: map['pdf_file_path'],
       articleContent: map['article_content'],
+      articleContentDelta: parseDeltaValue(map['article_content_delta']),
       poemVerses:
           map['poem_verses'] != null && map['poem_verses'].toString().isNotEmpty
           ? map['poem_verses'].toString().split('||| VERSE_SEPARATOR |||')
+          : null,
+      articleContentTe: map['article_content_te'],
+      articleContentHi: map['article_content_hi'],
+      poemVersesTe:
+          map['poem_verses_te'] != null &&
+              map['poem_verses_te'].toString().isNotEmpty
+          ? map['poem_verses_te'].toString().split('||| VERSE_SEPARATOR |||')
+          : null,
+      poemVersesHi:
+          map['poem_verses_hi'] != null &&
+              map['poem_verses_hi'].toString().isNotEmpty
+          ? map['poem_verses_hi'].toString().split('||| VERSE_SEPARATOR |||')
           : null,
       likesCount: map['likes_count'] ?? 0,
       bookmarksCount: map['bookmarks_count'] ?? 0,
@@ -237,6 +271,36 @@ class Post {
     );
   }
 
+  /// Parse rich-text delta from list/json-string/map payloads.
+  static List<dynamic>? parseDeltaValue(dynamic raw) {
+    if (raw == null) return null;
+
+    if (raw is List) {
+      return List<dynamic>.from(raw);
+    }
+
+    if (raw is Map) {
+      final ops = raw['ops'];
+      if (ops is List) {
+        return List<dynamic>.from(ops);
+      }
+      return null;
+    }
+
+    if (raw is String) {
+      final text = raw.trim();
+      if (text.isEmpty) return null;
+      try {
+        final decoded = jsonDecode(text);
+        return parseDeltaValue(decoded);
+      } catch (_) {
+        return null;
+      }
+    }
+
+    return null;
+  }
+
   /// Copy with method for updating post properties
   Post copyWith({
     String? id,
@@ -246,6 +310,7 @@ class Post {
     String? caption,
     String? captionTe,
     String? captionHi,
+    List<dynamic>? captionDelta,
     String? mediaUrl,
     ContentType? contentType,
     String? category,
@@ -255,7 +320,12 @@ class Post {
     DateTime? publishedAt,
     String? pdfFilePath,
     String? articleContent,
+    List<dynamic>? articleContentDelta,
     List<String>? poemVerses,
+    String? articleContentTe,
+    String? articleContentHi,
+    List<String>? poemVersesTe,
+    List<String>? poemVersesHi,
     int? likesCount,
     int? bookmarksCount,
     int? sharesCount,
@@ -274,6 +344,7 @@ class Post {
       caption: caption ?? this.caption,
       captionTe: captionTe ?? this.captionTe,
       captionHi: captionHi ?? this.captionHi,
+      captionDelta: captionDelta ?? this.captionDelta,
       mediaUrl: mediaUrl ?? this.mediaUrl,
       contentType: contentType ?? this.contentType,
       category: category ?? this.category,
@@ -283,7 +354,12 @@ class Post {
       publishedAt: publishedAt ?? this.publishedAt,
       pdfFilePath: pdfFilePath ?? this.pdfFilePath,
       articleContent: articleContent ?? this.articleContent,
+      articleContentDelta: articleContentDelta ?? this.articleContentDelta,
       poemVerses: poemVerses ?? this.poemVerses,
+      articleContentTe: articleContentTe ?? this.articleContentTe,
+      articleContentHi: articleContentHi ?? this.articleContentHi,
+      poemVersesTe: poemVersesTe ?? this.poemVersesTe,
+      poemVersesHi: poemVersesHi ?? this.poemVersesHi,
       likesCount: likesCount ?? this.likesCount,
       bookmarksCount: bookmarksCount ?? this.bookmarksCount,
       sharesCount: sharesCount ?? this.sharesCount,
@@ -303,27 +379,12 @@ class Post {
     return matches.map((m) => m.group(0)!.substring(1)).toList();
   }
 
-  /// Check if post is accessible for a given user role and subscription status
-  bool isAccessibleFor({
-    required bool isAdmin,
-    required bool isReporter,
-    required bool isSubscribed,
-  }) {
-    // Admin and Reporter always have access
-    if (isAdmin || isReporter) return true;
-
-    // Subscribed users have access to latest content
-    if (isSubscribed) return true;
-
-    // Public users see content after 7 days
-    final daysSincePublished = DateTime.now().difference(publishedAt).inDays;
-    return daysSincePublished >= 7;
+  /// Check if post is accessible for a given user role
+  bool isAccessibleFor({required bool isAdmin, required bool isReporter}) {
+    // All users have access to all content (subscription removed)
+    return true;
   }
 
-  /// Get days until accessible for public users
-  int get daysUntilPublicAccess {
-    final daysSincePublished = DateTime.now().difference(publishedAt).inDays;
-    final remaining = 7 - daysSincePublished;
-    return remaining > 0 ? remaining : 0;
-  }
+  /// Get days until accessible for public users (always 0 now)
+  int get daysUntilPublicAccess => 0;
 }

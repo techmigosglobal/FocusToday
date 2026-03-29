@@ -2,87 +2,43 @@
 // ignore_for_file: type=lint
 import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter/foundation.dart'
-    show defaultTargetPlatform, kIsWeb, TargetPlatform;
+    show defaultTargetPlatform, TargetPlatform;
 
 /// Default [FirebaseOptions] for use with your Firebase apps.
 ///
-/// Example:
-/// ```dart
-/// import 'firebase_options.dart';
-/// // ...
-/// await Firebase.initializeApp(
-///   options: DefaultFirebaseOptions.currentPlatform,
-/// );
-/// ```
+/// Supports only Android and iOS platforms.
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
-    if (kIsWeb) {
-      return web;
-    }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
         return android;
       case TargetPlatform.iOS:
         return ios;
-      case TargetPlatform.macOS:
-        return macos;
-      case TargetPlatform.windows:
-        return windows;
-      case TargetPlatform.linux:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for linux - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
       default:
         throw UnsupportedError(
-          'DefaultFirebaseOptions are not supported for this platform.',
+          'DefaultFirebaseOptions are not supported for this platform. '
+          'Only Android and iOS are supported.',
         );
     }
   }
 
-  static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyA-6raOqmBsB42GVYijeYBs9cHCI5P9gHU',
-    appId: '1:984415321614:web:c6801a74c936e973bd865f',
-    messagingSenderId: '984415321614',
-    projectId: 'egaletv-57c7a',
-    authDomain: 'egaletv-57c7a.firebaseapp.com',
-    storageBucket: 'egaletv-57c7a.firebasestorage.app',
-    measurementId: 'G-DZEB5L1N32',
-  );
-
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyD66p02ZdOEM8df2-6eNdzb8ZeFNjFCwvY',
-    appId: '1:984415321614:android:c3a00dd1818c3570bd865f',
-    messagingSenderId: '984415321614',
-    projectId: 'egaletv-57c7a',
-    storageBucket: 'egaletv-57c7a.firebasestorage.app',
+    apiKey: 'AIzaSyBBxJdj7qo8w8FKZD4sIwkz6wTJihDiQJY',
+    appId: '1:935710220800:android:a5da1d236dea7d76cd2ee5',
+    messagingSenderId: '935710220800',
+    projectId: 'crii-focus-today',
+    databaseURL: 'https://crii-focus-today-default-rtdb.asia-southeast1.firebasedatabase.app',
+    storageBucket: 'crii-focus-today.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyBAQEfgAK4F5Z-2cA1oCnREMqH0i3pda6E',
-    appId: '1:984415321614:ios:8685b884fa2fe04ebd865f',
-    messagingSenderId: '984415321614',
-    projectId: 'egaletv-57c7a',
-    storageBucket: 'egaletv-57c7a.firebasestorage.app',
+    apiKey: 'AIzaSyDd3k1vg9rBCwBqoEQ3F8c7rZMCGpAtAGY',
+    appId: '1:935710220800:ios:1b3850b64fd98b89cd2ee5',
+    messagingSenderId: '935710220800',
+    projectId: 'crii-focus-today',
+    databaseURL: 'https://crii-focus-today-default-rtdb.asia-southeast1.firebasedatabase.app',
+    storageBucket: 'crii-focus-today.firebasestorage.app',
     iosBundleId: 'com.eagletv.eagleTv',
   );
 
-  static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyBAQEfgAK4F5Z-2cA1oCnREMqH0i3pda6E',
-    appId: '1:984415321614:ios:8685b884fa2fe04ebd865f',
-    messagingSenderId: '984415321614',
-    projectId: 'egaletv-57c7a',
-    storageBucket: 'egaletv-57c7a.firebasestorage.app',
-    iosBundleId: 'com.eagletv.eagleTv',
-  );
-
-  static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyA-6raOqmBsB42GVYijeYBs9cHCI5P9gHU',
-    appId: '1:984415321614:web:5ba255fc3b2d2531bd865f',
-    messagingSenderId: '984415321614',
-    projectId: 'egaletv-57c7a',
-    authDomain: 'egaletv-57c7a.firebaseapp.com',
-    storageBucket: 'egaletv-57c7a.firebasestorage.app',
-    measurementId: 'G-JNL6TEC3CS',
-  );
 }

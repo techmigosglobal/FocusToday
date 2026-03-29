@@ -1,0 +1,246 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function roleWeight(role) {
+      return role == 'superAdmin' || role == 'super_admin' ? 4
+        : role == 'admin' ? 3
+        : role == 'reporter' ? 2
+        : role == 'publicUser' || role == 'public_user' ? 1
+        : 0;
+    }
+
+    function userPath(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+
+    function myRole() {
+      return isSignedIn() &&
+          exists(userPath(request.auth.uid)) &&
+          get(userPath(request.auth.uid)).data.role is string
+        ? get(userPath(request.auth.uid)).data.role
+        : 'public_user';
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isReporterOrAbove() {
+      return roleWeight(myRole()) >= 2;
+    }
+
+    function isAdminOrAbove() {
+      return roleWeight(myRole()) >= 3;
+    }
+
+    function isSuperAdmin() {
+      return roleWeight(myRole()) >= 4;
+    }
+
+    function postPath(postId) {
+      return /databases/$(database)/documents/posts/$(postId);
+    }
+
+    function canReadPost(postId) {
+      return get(postPath(postId)).data.status == 'approved' ||
+          isAdminOrAbove() ||
+          (isSignedIn() &&
+              request.auth.uid == get(postPath(postId)).data.author_id);
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isAdminOrAbove();
+      allow update: if isAdminOrAbove() || (
+        isOwner(userId) &&
+        request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'display_name',
+          'bio',
+          'profile_picture',
+          'area',
+          'district',
+          'state',
+          'preferred_language',
+          'fcm_token',
+          'updated_at',
+        ])
+      );
+      allow delete: if isAdminOrAbove() && request.auth.uid != userId;
+
+      // Multi-device token management
+      match /devices/{deviceId} {
+        // Owners can read their own devices; admins can read for support/debug.
+        allow read: if isOwner(userId) || isAdminOrAbove();
+
+        // Explicit create/update/delete rules (no broad write) to enforce field allowlist.
+        allow create: if isOwner(userId) &&
+          request.resource.data.keys().hasOnly([
+            'fcm_token',
+            'device_id',
+            'platform',
+            'created_at',
+            'last_active_at',
+            'updated_at',
+            'active',
+          ]);
+
+        allow update: if isOwner(userId) &&
+          request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'fcm_token',
+            'device_id',
+            'platform',
+            'created_at',
+            'last_active_at',
+            'updated_at',
+            'active',
+          ]);
+
+        allow delete: if isOwner(userId) || isAdminOrAbove();
+      }
+
+      match /bookmarks/{postId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /meeting_seen/{meetingId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    match /posts/{postId} {
+      allow read: if resource.data.status == 'approved' ||
+          isAdminOrAbove() ||
+          (isSignedIn() && request.auth.uid == resource.data.author_id);
+      allow create: if isReporterOrAbove() &&
+          request.resource.data.author_id == request.auth.uid;
+      // Authors can update their own posts; any signed-in user can record impressions on approved posts
+      allow update: if isAdminOrAbove() ||
+          (isSignedIn() && request.auth.uid == resource.data.author_id) ||
+          (resource.data.status == 'approved' && isSignedIn());
+      allow delete: if isAdminOrAbove() ||
+          (isSignedIn() && request.auth.uid == resource.data.author_id);
+
+      match /comments/{commentId} {
+        allow read: if canReadPost(postId);
+        allow create: if isSignedIn();
+        allow update, delete: if isSignedIn() &&
+            (request.auth.uid == resource.data.author_id || isAdminOrAbove());
+      }
+
+      match /interactions/{userId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    match /notifications/{notificationId} {
+      allow read, update, delete: if isSignedIn() &&
+          request.auth.uid == resource.data.user_id;
+      allow create: if false;
+    }
+
+    match /breaking_news/{newsId} {
+      allow read: if true;
+      allow write: if isAdminOrAbove();
+    }
+
+    match /reports/{reportId} {
+      allow read: if isAdminOrAbove() ||
+          resource.data.status == 'published' ||
+          (isSignedIn() &&
+              (request.auth.uid == resource.data.reporter_id ||
+                  request.auth.uid == resource.data.created_by));
+      allow create: if isSignedIn();
+      allow update, delete: if isAdminOrAbove();
+    }
+
+    match /meetings/{meetingId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdminOrAbove();
+
+      match /interests/{userId} {
+        // Query-compatible self-read for collectionGroup queries:
+        // where('user_id', '==', request.auth.uid)
+        allow read: if isAdminOrAbove() ||
+            isOwner(userId) ||
+            (isSignedIn() && resource.data.user_id == request.auth.uid);
+        allow create: if isSignedIn() &&
+            (isOwner(userId) || request.resource.data.user_id == request.auth.uid);
+        allow delete: if isOwner(userId) ||
+            (isSignedIn() && resource.data.user_id == request.auth.uid);
+        allow update: if false;
+      }
+
+      match /rsvps/{userId} {
+        // Query-compatible self-read for collectionGroup queries:
+        // where('user_id', '==', request.auth.uid)
+        allow read: if isAdminOrAbove() ||
+            isOwner(userId) ||
+            (isSignedIn() && resource.data.user_id == request.auth.uid);
+        allow create, update: if isSignedIn() &&
+            (isOwner(userId) || request.resource.data.user_id == request.auth.uid);
+        allow delete: if isOwner(userId) ||
+            (isSignedIn() && resource.data.user_id == request.auth.uid);
+      }
+    }
+
+    match /partners/{partnerId} {
+      allow create: if isSignedIn();
+      allow read, update, delete: if isAdminOrAbove() ||
+          (isSignedIn() && request.auth.uid == resource.data.user_id);
+    }
+
+    match /reporter_applications/{applicationId} {
+      allow create: if isSignedIn() &&
+          request.resource.data.applicant_id == request.auth.uid &&
+          request.resource.data.status == 'pending' &&
+          request.resource.data.full_name is string &&
+          request.resource.data.phone is string &&
+          request.resource.data.district is string &&
+          request.resource.data.state is string &&
+          request.resource.data.qualification is string &&
+          request.resource.data.motivation is string;
+      allow read: if isAdminOrAbove() ||
+          (isSignedIn() && request.auth.uid == resource.data.applicant_id);
+      allow update: if isAdminOrAbove() &&
+          request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'status',
+            'reviewed_by',
+            'reviewed_at',
+            'rejection_reason',
+          ]) &&
+          request.resource.data.reviewed_by == request.auth.uid;
+      allow delete: if false;
+    }
+
+    match /audit_logs/{logId} {
+      allow create: if isSignedIn();
+      allow read, update, delete: if isAdminOrAbove();
+    }
+
+    match /telemetry_events/{eventId} {
+      allow create: if isSignedIn() &&
+          request.resource.data.user_id == request.auth.uid &&
+          request.resource.data.event_name is string &&
+          request.resource.data.event_group is string &&
+          request.resource.data.screen is string;
+      allow read: if isAdminOrAbove();
+      allow update, delete: if false;
+    }
+
+    match /system/storage_config {
+      allow read: if isAdminOrAbove();
+      allow write: if isSuperAdmin();
+    }
+
+    match /system/focus_landing_config {
+      // Landing content is visible to all authenticated roles.
+      allow read: if isSignedIn();
+      // Only admin/super admin can publish landing content.
+      allow write: if isAdminOrAbove();
+    }
+  }
+}

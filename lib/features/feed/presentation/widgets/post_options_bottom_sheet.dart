@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../shared/models/post.dart';
 import '../../../../shared/models/user.dart';
 import '../../../../core/services/language_service.dart';
 import '../../../../core/localization/app_localizations.dart';
+import '../../../moderation/data/repositories/report_repository.dart';
+import '../../data/repositories/post_repository.dart';
 
 /// Post Options Bottom Sheet
 /// Shows action options for a post
@@ -23,7 +26,9 @@ class PostOptionsBottomSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final localizations = AppLocalizations(currentLanguage);
     final isOwnPost = post.authorId == currentUser.id;
-    final isAdmin = currentUser.role == UserRole.admin;
+    final isAdmin =
+        currentUser.role == UserRole.superAdmin ||
+        currentUser.role == UserRole.admin;
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -60,13 +65,14 @@ class PostOptionsBottomSheet extends StatelessWidget {
           _buildOption(
             context,
             icon: Icons.link,
-            title: 'Copy Link',
+            title: localizations.copyLink,
             onTap: () {
+              Clipboard.setData(ClipboardData(text: 'https://crii-focus-today.web.app/p/${post.id}'));
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Link copied to clipboard!'),
-                  duration: Duration(seconds: 2),
+                SnackBar(
+                  content: Text(localizations.linkCopied),
+                  duration: const Duration(seconds: 2),
                 ),
               );
             },
@@ -88,7 +94,7 @@ class PostOptionsBottomSheet extends StatelessWidget {
             _buildOption(
               context,
               icon: Icons.flag_outlined,
-              title: 'Report Post',
+              title: localizations.reportPost,
               onTap: () {
                 Navigator.pop(context);
                 _showReportDialog(context);
@@ -100,13 +106,13 @@ class PostOptionsBottomSheet extends StatelessWidget {
             _buildOption(
               context,
               icon: Icons.visibility_off_outlined,
-              title: 'Hide Post',
+              title: localizations.hidePost,
               onTap: () {
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Post hidden from feed'),
-                    duration: Duration(seconds: 2),
+                  SnackBar(
+                    content: Text(localizations.postHidden),
+                    duration: const Duration(seconds: 2),
                   ),
                 );
               },
@@ -130,7 +136,7 @@ class PostOptionsBottomSheet extends StatelessWidget {
             _buildOption(
               context,
               icon: Icons.block,
-              title: 'Block User',
+              title: localizations.blockUser,
               color: Colors.red,
               onTap: () {
                 Navigator.pop(context);
@@ -153,39 +159,100 @@ class PostOptionsBottomSheet extends StatelessWidget {
       leading: Icon(icon, color: color ?? AppColors.textPrimary),
       title: Text(
         title,
-        style: TextStyle(
-          color: color ?? AppColors.textPrimary,
-          fontSize: 16,
-        ),
+        style: TextStyle(color: color ?? AppColors.textPrimary, fontSize: 16),
       ),
       onTap: onTap,
     );
   }
 
   void _showReportDialog(BuildContext context) {
+    final reasons = [
+      'Inappropriate content',
+      'Spam or misleading',
+      'Hate speech',
+      'Violence or threats',
+      'Copyright violation',
+      'Other',
+    ];
+    String? selectedReason;
+    final customController = TextEditingController();
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Report Post'),
-        content: const Text('Are you sure you want to report this post?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Post reported. Thank you for your feedback.'),
-                  duration: Duration(seconds: 2),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(AppLocalizations(currentLanguage).reportPostTitle),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(AppLocalizations(currentLanguage).reportPostMessage),
+              const SizedBox(height: 12),
+              RadioGroup<String>(
+                groupValue: selectedReason ?? '',
+                onChanged: (v) => setDialogState(() => selectedReason = v),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: reasons
+                      .map(
+                        (reason) => RadioListTile<String>(
+                          title: Text(
+                            reason,
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                          value: reason,
+                          dense: true,
+                        ),
+                      )
+                      .toList(),
                 ),
-              );
-            },
-            child: const Text('Report'),
+              ),
+              if (selectedReason == 'Other')
+                TextField(
+                  controller: customController,
+                  decoration: const InputDecoration(
+                    hintText: 'Describe the issue...',
+                  ),
+                  maxLines: 2,
+                ),
+            ],
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(AppLocalizations(currentLanguage).cancel),
+            ),
+            TextButton(
+              onPressed: () async {
+                if (selectedReason == null) return;
+                final reason = selectedReason == 'Other'
+                    ? customController.text.trim()
+                    : selectedReason!;
+                if (reason.isEmpty) return;
+                Navigator.pop(context);
+                final success = await ReportRepository().reportPost(
+                  postId: post.id,
+                  reporterId: currentUser.id,
+                  reason: reason,
+                );
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        success
+                            ? AppLocalizations(
+                                currentLanguage,
+                              ).reportConfirmation
+                            : 'You have already reported this post',
+                      ),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                }
+              },
+              child: Text(AppLocalizations(currentLanguage).report),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -195,24 +262,34 @@ class PostOptionsBottomSheet extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Post'),
-        content: const Text('Are you sure you want to delete this post? This action cannot be undone.'),
+        content: const Text(
+          'Are you sure you want to delete this post? This action cannot be undone.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Post deleted'),
-                  duration: Duration(seconds: 2),
-                ),
+              await PostRepository().deletePost(
+                post.id,
+                authorId: post.authorId,
               );
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      AppLocalizations(currentLanguage).deleteConfirmation,
+                    ),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              }
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
+            child: Text(AppLocalizations(currentLanguage).delete),
           ),
         ],
       ),
@@ -223,25 +300,27 @@ class PostOptionsBottomSheet extends StatelessWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Block User'),
-        content: Text('Are you sure you want to block ${post.authorName}?'),
+        title: Text(AppLocalizations(currentLanguage).blockUserTitle),
+        content: Text(AppLocalizations(currentLanguage).blockUserMessage),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(AppLocalizations(currentLanguage).cancel),
           ),
           TextButton(
             onPressed: () {
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('${post.authorName} has been blocked'),
+                  content: Text(
+                    AppLocalizations(currentLanguage).blockConfirmation,
+                  ),
                   duration: const Duration(seconds: 2),
                 ),
               );
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Block'),
+            child: Text(AppLocalizations(currentLanguage).block),
           ),
         ],
       ),

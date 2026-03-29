@@ -1,0 +1,86 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function roleWeight(role) {
+      return role == 'superAdmin' || role == 'super_admin' ? 4
+        : role == 'admin' ? 3
+        : role == 'reporter' ? 2
+        : role == 'publicUser' || role == 'public_user' ? 1
+        : 0;
+    }
+
+    function userDocPath(uid) {
+      return /databases/(default)/documents/users/$(uid);
+    }
+
+    function myRole() {
+      return isSignedIn() &&
+          exists(userDocPath(request.auth.uid)) &&
+          get(userDocPath(request.auth.uid)).data.role is string
+        ? get(userDocPath(request.auth.uid)).data.role
+        : 'public_user';
+    }
+
+    function isAdminOrAbove() {
+      return roleWeight(myRole()) >= 3;
+    }
+
+    function isImage() {
+      return request.resource != null &&
+          request.resource.contentType.matches('image/.*');
+    }
+
+    function isAllowedMediaType() {
+      return request.resource != null &&
+          (
+            request.resource.contentType.matches('image/.*') ||
+            request.resource.contentType.matches('video/.*') ||
+            request.resource.contentType == 'application/pdf'
+          );
+    }
+
+    match /posts/{userId}/{fileName} {
+      allow read: if true;
+      allow create, update: if isOwner(userId) &&
+          isAllowedMediaType() &&
+          request.resource.size < 50 * 1024 * 1024;
+      allow delete: if isOwner(userId);
+    }
+
+    match /profiles/{userId}/{fileName} {
+      allow read: if true;
+      allow create, update: if isOwner(userId) &&
+          isImage() &&
+          request.resource.size < 10 * 1024 * 1024;
+      allow delete: if isOwner(userId);
+    }
+
+    match /focus_landing/{userId}/{fileName} {
+      allow read: if true;
+      allow create, update: if isOwner(userId) &&
+          isImage() &&
+          request.resource.size < 10 * 1024 * 1024;
+      allow delete: if isOwner(userId);
+    }
+
+    match /meetings/{userId}/{fileName} {
+      allow read: if true;
+      allow create, update: if (isOwner(userId) || isAdminOrAbove()) &&
+          isImage() &&
+          request.resource.size < 10 * 1024 * 1024;
+      allow delete: if isOwner(userId) || isAdminOrAbove();
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

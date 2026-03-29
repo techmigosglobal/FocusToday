@@ -1,23 +1,20 @@
 import 'package:flutter/material.dart';
+import '../../app/theme/app_colors.dart';
 
 /// Category Badge Widget
 /// Colored category badge for content cards
 class CategoryBadgeWidget extends StatelessWidget {
   final String category;
 
-  const CategoryBadgeWidget({
-    super.key,
-    required this.category,
-  });
+  const CategoryBadgeWidget({super.key, required this.category});
 
   Color _getCategoryColor() {
     switch (category.toLowerCase()) {
       case 'news':
-        return Colors.blue;
-      case 'entertainment':
-        return Colors.purple;
+        return AppColors.primary;
+
       case 'sports':
-        return Colors.green;
+        return AppColors.secondary;
       case 'politics':
         return Colors.red;
       case 'technology':
@@ -25,7 +22,7 @@ class CategoryBadgeWidget extends StatelessWidget {
       case 'health':
         return Colors.pink;
       case 'business':
-        return Colors.orange;
+        return AppColors.accent;
       default:
         return Colors.grey;
     }
@@ -33,18 +30,21 @@ class CategoryBadgeWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final color = _getCategoryColor();
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: _getCategoryColor(),
-        borderRadius: BorderRadius.circular(4),
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Text(
         category,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.3,
         ),
       ),
     );

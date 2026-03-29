@@ -1,0 +1,6 @@
+{
+    "codium.codeCompletion.enable": false,
+    "java.configuration.updateBuildConfiguration": "interactive",
+    "typescript.tsdk": "backend_nestjs/node_modules/typescript/lib",
+    "chatgpt.openOnStartup": true
+}

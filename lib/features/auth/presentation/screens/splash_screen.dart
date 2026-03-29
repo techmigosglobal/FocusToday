@@ -1,12 +1,14 @@
-import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:flutter/material.dart';
 import '../../../../app/theme/app_colors.dart';
-import 'phone_login_screen.dart';
+import '../../../../core/services/notification_service.dart';
+import '../../../../shared/models/user.dart';
+import 'login_method_selection_screen.dart';
 import '../../data/repositories/auth_repository.dart';
-import '../../../feed/presentation/screens/feed_screen.dart';
+import '../../../../shared/widgets/main_navigation_shell.dart';
 
 /// Splash Screen - First screen shown when app launches
-/// Displays EagleTV logo with animations and checks authentication status
+/// Displays Focus Today logo with animations and checks authentication status
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -75,51 +77,87 @@ class _SplashScreenState extends State<SplashScreen>
     super.dispose();
   }
 
-  /// Initialize app and navigate to appropriate screen
+  /// Initialize app in parallel: auth check + minimum display duration run together
   Future<void> _initializeApp() async {
-    // Wait for animations to complete and minimum splash duration
-    await Future.delayed(const Duration(milliseconds: 2000));
+    // Run auth check AND minimum wait simultaneously — whichever completes last wins.
+    // This is 40% faster: if auth resolves in 0.6s, we still wait 1.2s minimum.
+    try {
+      final results = await Future.wait([
+        _checkAuth(),
+        Future<void>.delayed(const Duration(milliseconds: 1200)),
+      ]);
+      final user = results[0] as dynamic; // User?
+      await _navigate(user);
+    } catch (e) {
+      debugPrint('[Splash] init error: $e');
+      await _navigate(null);
+    }
+  }
 
-    // Check if user is authenticated
+  Future<dynamic> _checkAuth() async {
     try {
       final authRepo = await AuthRepository.init();
-      final user = await authRepo.restoreSession();
+      return await authRepo.restoreSession().timeout(
+        const Duration(seconds: 8),
+        onTimeout: () {
+          debugPrint('[Splash] restoreSession timed out');
+          return null;
+        },
+      );
+    } catch (e) {
+      debugPrint('[Splash] restoreSession error: $e');
+      return null;
+    }
+  }
 
-      if (mounted) {
-        if (user != null) {
-          // User is logged in - go to feed
-          Navigator.of(context).pushReplacement(
-            PageRouteBuilder(
-              pageBuilder: (context, animation, secondaryAnimation) =>
-                  FeedScreen(currentUser: user),
-              transitionsBuilder:
-                  (context, animation, secondaryAnimation, child) {
-                    return FadeTransition(opacity: animation, child: child);
-                  },
-              transitionDuration: const Duration(milliseconds: 500),
-            ),
-          );
-        } else {
-          // No session - go to login
-          Navigator.of(context).pushReplacement(
-            PageRouteBuilder(
-              pageBuilder: (context, animation, secondaryAnimation) =>
-                  const PhoneLoginScreen(),
-              transitionsBuilder:
-                  (context, animation, secondaryAnimation, child) {
-                    return FadeTransition(opacity: animation, child: child);
-                  },
-              transitionDuration: const Duration(milliseconds: 500),
-            ),
-          );
-        }
-      }
-    } catch (_) {
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const PhoneLoginScreen()),
+  Future<void> _navigate(User? user) async {
+    if (!mounted) return;
+    if (user != null) {
+      try {
+        await NotificationService.instance.onUserAuthenticated(
+          user.id,
+          user.role,
         );
+      } catch (e) {
+        debugPrint('[Splash] notification setup failed: $e');
       }
+      if (!mounted) return;
+
+      // Check if profile needs completion for any user (not just public)
+      bool showProfilePrompt = false;
+      if (user.role.toStr() == 'publicUser') {
+        final isIncomplete =
+            (user.displayName == 'User' || user.displayName.isEmpty) &&
+            (user.profilePicture == null || user.profilePicture!.isEmpty) &&
+            (user.bio == null || user.bio!.isEmpty);
+        showProfilePrompt = isIncomplete;
+      } else if (user.displayName == 'User' || user.displayName.isEmpty) {
+        // For other roles, also prompt if name is missing
+        showProfilePrompt = true;
+      }
+
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              MainNavigationShell(
+                currentUser: user,
+                showProfilePrompt: showProfilePrompt,
+              ),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+              FadeTransition(opacity: animation, child: child),
+          transitionDuration: const Duration(milliseconds: 400),
+        ),
+      );
+    } else {
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              const LoginMethodSelectionScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+              FadeTransition(opacity: animation, child: child),
+          transitionDuration: const Duration(milliseconds: 400),
+        ),
+      );
     }
   }
 
@@ -147,14 +185,13 @@ class _SplashScreenState extends State<SplashScreen>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Logo with shadow
+                  // Logo with shadow - Large and clean, no borders
                   Container(
                     decoration: BoxDecoration(
-                      shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withValues(alpha: 0.2),
-                          blurRadius: 20,
+                          blurRadius: 30,
                           spreadRadius: 5,
                         ),
                       ],
@@ -162,16 +199,16 @@ class _SplashScreenState extends State<SplashScreen>
                     child: ScaleTransition(
                       scale: _pulseAnimation,
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(60),
+                        borderRadius: BorderRadius.circular(32),
                         child: Image.asset(
-                          'assets/images/eagle_tv_logo.png',
-                          width: 120,
-                          height: 120,
+                          'Focus_Today_icon.png',
+                          width: 180,
+                          height: 180,
                           fit: BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) =>
                               const Icon(
-                                Icons.connected_tv,
-                                size: 120,
+                                Icons.play_circle_fill_rounded,
+                                size: 180,
                                 color: Colors.white,
                               ),
                         ),
@@ -182,11 +219,11 @@ class _SplashScreenState extends State<SplashScreen>
 
                   // App name with shadow
                   Text(
-                    'EagleTV',
-                    style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                    'Focus Today',
+                    style: Theme.of(context).textTheme.displaySmall?.copyWith(
                       color: Colors.white,
                       fontWeight: FontWeight.w900,
-                      letterSpacing: 2,
+                      letterSpacing: 1,
                       shadows: [
                         Shadow(
                           color: Colors.black.withValues(alpha: 0.3),
@@ -200,7 +237,7 @@ class _SplashScreenState extends State<SplashScreen>
 
                   // Tagline
                   Text(
-                    'Your Premium Social Media',
+                    'Bringing Focus To What Matters Most.',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       color: Colors.white.withValues(alpha: 0.9),
                       fontWeight: FontWeight.w500,
@@ -209,17 +246,8 @@ class _SplashScreenState extends State<SplashScreen>
 
                   const SizedBox(height: 60),
 
-                  // Loading indicator
-                  SizedBox(
-                    width: 40,
-                    height: 40,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 3,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        Colors.white.withValues(alpha: 0.9),
-                      ),
-                    ),
-                  ),
+                  // Animated loading dots
+                  _LoadingDots(),
                 ],
               ),
             ),
@@ -234,7 +262,7 @@ class _SplashScreenState extends State<SplashScreen>
           child: FadeTransition(
             opacity: _fadeAnimation,
             child: Text(
-              'Version 2.0.0',
+              'Version 1.0.0',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Colors.white.withValues(alpha: 0.7),
@@ -243,6 +271,68 @@ class _SplashScreenState extends State<SplashScreen>
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Three animated pulsing dots loading indicator
+class _LoadingDots extends StatefulWidget {
+  @override
+  State<_LoadingDots> createState() => _LoadingDotsState();
+}
+
+class _LoadingDotsState extends State<_LoadingDots>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 12,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(3, (i) {
+          return AnimatedBuilder(
+            animation: _controller,
+            builder: (context, child) {
+              final phase = (_controller.value + i / 3) % 1.0;
+              final opacity =
+                  (0.3 + 0.7 * (1 - (phase - 0.5).abs() * 2).clamp(0.0, 1.0));
+              final scale =
+                  0.6 + 0.4 * (1 - (phase - 0.5).abs() * 2).clamp(0.0, 1.0);
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Transform.scale(
+                  scale: scale,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withValues(alpha: opacity),
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+        }),
       ),
     );
   }

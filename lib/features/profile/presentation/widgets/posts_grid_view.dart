@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../app/theme/app_colors.dart';
+import '../../../../app/theme/app_dimensions.dart';
 import '../../../../shared/models/post.dart';
 import '../../../../shared/models/user.dart';
+import '../../../../shared/widgets/page_transitions.dart';
 import '../../../feed/presentation/screens/post_detail_screen.dart';
 import '../../../../core/services/language_service.dart';
 import '../../../../core/localization/app_localizations.dart';
+import '../../../../main.dart';
 
 /// Posts Grid View
 /// Displays user's posts in a grid layout
@@ -12,14 +16,16 @@ class PostsGridView extends StatefulWidget {
   final List<Post> posts;
   final bool isOwnProfile;
   final VoidCallback? onPostTap;
-  final User currentUser; // Added currentUser field
+  final User currentUser;
+  final String? emptyMessage;
 
   const PostsGridView({
     super.key,
     required this.posts,
     this.isOwnProfile = false,
     this.onPostTap,
-    required this.currentUser, // Added currentUser to constructor
+    required this.currentUser,
+    this.emptyMessage,
   });
 
   @override
@@ -28,6 +34,8 @@ class PostsGridView extends StatefulWidget {
 
 class _PostsGridViewState extends State<PostsGridView> {
   AppLanguage _currentLanguage = AppLanguage.english;
+  LanguageService? _languageService;
+  bool _isLanguageListenerAttached = false;
 
   @override
   void initState() {
@@ -35,13 +43,37 @@ class _PostsGridViewState extends State<PostsGridView> {
     _loadLanguage();
   }
 
+  @override
+  void dispose() {
+    if (_isLanguageListenerAttached && _languageService != null) {
+      _languageService!.removeListener(_handleLanguageChange);
+      _isLanguageListenerAttached = false;
+    }
+    super.dispose();
+  }
+
   Future<void> _loadLanguage() async {
-    final languageService = await LanguageService.init();
+    final languageService =
+        FocusTodayApp.languageService ?? await LanguageService.init();
+    FocusTodayApp.languageService ??= languageService;
+    _languageService = languageService;
+    if (!_isLanguageListenerAttached) {
+      languageService.addListener(_handleLanguageChange);
+      _isLanguageListenerAttached = true;
+    }
     if (mounted) {
       setState(() {
         _currentLanguage = languageService.currentLanguage;
       });
     }
+  }
+
+  void _handleLanguageChange() {
+    final languageService = _languageService;
+    if (!mounted || languageService == null) return;
+    final nextLanguage = languageService.currentLanguage;
+    if (nextLanguage == _currentLanguage) return;
+    setState(() => _currentLanguage = nextLanguage);
   }
 
   @override
@@ -56,22 +88,24 @@ class _PostsGridViewState extends State<PostsGridView> {
             Icon(
               Icons.article_outlined,
               size: 64,
-              color: AppColors.textSecondary.withValues(alpha: 0.3),
+              color: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.color?.withValues(alpha: 0.3),
             ),
             const SizedBox(height: 16),
             Text(
-              localizations.noPostsYet,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(color: AppColors.textSecondary),
+              widget.emptyMessage ?? localizations.noPostsYet,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: Theme.of(context).textTheme.bodyMedium?.color,
+              ),
             ),
             if (widget.isOwnProfile) ...[
               const SizedBox(height: 8),
               Text(
                 localizations.startCreatingContent,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).textTheme.bodyMedium?.color,
+                ),
               ),
             ],
           ],
@@ -81,8 +115,8 @@ class _PostsGridViewState extends State<PostsGridView> {
 
     return GridView.builder(
       padding: const EdgeInsets.all(8),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: AppDimensions.responsiveGridCount(context),
         crossAxisSpacing: 8,
         mainAxisSpacing: 8,
         childAspectRatio: 1,
@@ -98,11 +132,15 @@ class _PostsGridViewState extends State<PostsGridView> {
   Widget _buildPostTile(BuildContext context, Post post) {
     return GestureDetector(
       onTap: () async {
-        final languageService = await LanguageService.init();
+        final languageService =
+            _languageService ??
+            FocusTodayApp.languageService ??
+            await LanguageService.init();
+        FocusTodayApp.languageService ??= languageService;
         if (context.mounted) {
           Navigator.push(
             context,
-            MaterialPageRoute(
+            SmoothPageRoute(
               builder: (_) => PostDetailScreen(
                 post: post,
                 currentUser: widget.currentUser,
@@ -118,18 +156,22 @@ class _PostsGridViewState extends State<PostsGridView> {
           // Post thumbnail
           Container(
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: Theme.of(context).cardColor,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.divider),
+              border: Border.all(color: Theme.of(context).dividerColor),
             ),
             child:
                 post.contentType == ContentType.image && post.mediaUrl != null
                 ? ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      post.mediaUrl!,
+                    child: CachedNetworkImage(
+                      imageUrl: post.mediaUrl!,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => _buildDefaultThumbnail(post),
+                      width: double.infinity,
+                      height: double.infinity,
+                      memCacheWidth: 360,
+                      fadeInDuration: const Duration(milliseconds: 150),
+                      errorWidget: (_, _, _) => _buildDefaultThumbnail(post),
                     ),
                   )
                 : post.contentType == ContentType.video && post.mediaUrl != null
@@ -147,13 +189,13 @@ class _PostsGridViewState extends State<PostsGridView> {
                 decoration: BoxDecoration(
                   color: post.status == PostStatus.pending
                       ? AppColors.warning
-                      : Colors.red,
+                      : AppColors.destructiveFgOf(context),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
                   post.status == PostStatus.pending ? 'Pending' : 'Rejected',
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: AppColors.onPrimaryOf(context),
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
                   ),
@@ -169,18 +211,22 @@ class _PostsGridViewState extends State<PostsGridView> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.6),
+                  color: AppColors.overlayStrongOf(context),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.favorite, color: Colors.white, size: 12),
+                    Icon(
+                      Icons.favorite,
+                      color: AppColors.onPrimaryOf(context),
+                      size: 12,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       post.likesCount.toString(),
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: AppColors.onPrimaryOf(context),
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
                       ),
@@ -211,15 +257,17 @@ class _PostsGridViewState extends State<PostsGridView> {
         child: Padding(
           padding: const EdgeInsets.all(8),
           child: Text(
-            post.caption.length > 50
-                ? '${post.caption.substring(0, 50)}...'
-                : post.caption,
+            post.getLocalizedCaption(_currentLanguage.code).length > 50
+                ? '${post.getLocalizedCaption(_currentLanguage.code).substring(0, 50)}...'
+                : post.getLocalizedCaption(_currentLanguage.code),
             textAlign: TextAlign.center,
             maxLines: 3,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontSize: 10,
-              color: AppColors.textPrimary.withValues(alpha: 0.7),
+              color: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.color?.withValues(alpha: 0.7),
             ),
           ),
         ),
@@ -230,14 +278,14 @@ class _PostsGridViewState extends State<PostsGridView> {
   Widget _buildVideoThumbnail() {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.8),
+        color: AppColors.overlayStrongOf(context),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Center(
         child: Icon(
           Icons.play_circle_outline,
           size: 32,
-          color: Colors.white.withValues(alpha: 0.9),
+          color: AppColors.onPrimaryOf(context).withValues(alpha: 0.9),
         ),
       ),
     );

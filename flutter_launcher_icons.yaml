@@ -1,19 +1,19 @@
 flutter_launcher_icons:
-  android: "launcher_icon"
+  android: true
   ios: true
-  image_path: "assets/images/eagle_tv_logo.png"
+  image_path: "Focus_Today_icon.png"
+
+  # Android specific - circular icon (adaptive icons)
+  adaptive_icon_foreground: "Focus_Today_icon.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground_inset: 0
+
+  # Minimum SDK for adaptive icons
   min_sdk_android: 21
-  adaptive_icon_background: "#1A1A2E"
-  adaptive_icon_foreground: "assets/images/eagle_tv_logo.png"
+
+  # Remove alpha channel for iOS (required)
+  remove_alpha_ios: true
+
+  # Web configuration
   web:
-    generate: true
-    image_path: "assets/images/eagle_tv_logo.png"
-    background_color: "#1A1A2E"
-    theme_color: "#6C63FF"
-  windows:
-    generate: true
-    image_path: "assets/images/eagle_tv_logo.png"
-    icon_size: 48
-  macos:
-    generate: true
-    image_path: "assets/images/eagle_tv_logo.png"
+    generate: false
